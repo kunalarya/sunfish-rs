@@ -1,0 +1,14 @@
+[package]
+name = "sunfish-dsp"
+version = "0.1.0"
+authors = ["Kunal Arya <me@example.com>"]
+edition = "2018"
+
+# Enable debug symbols in release build.
+[profile.release]
+debug = true
+
+[dependencies]
+lazy_static = "1.4.0"
+log = "0.4.*"
+serde = { version = "1.0.60", features = ["serde_derive"] }
