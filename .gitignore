@@ -1,0 +1,10 @@
+**/target
+/target
+**/*.rs.bk
+*.swp
+*.sw0
+*~
+.DS_Store
+.ipynb_checkpoints/
+log.txt
+.trash
