@@ -2,6 +2,8 @@ pub mod biquad;
 pub mod env;
 pub mod filter;
 pub mod interpolation;
+pub mod interpolator;
+pub mod osc;
 pub mod resonant_filter;
 pub mod smoothing;
 
@@ -11,11 +13,11 @@ type F64AsU = u64;
 
 // Useful for putting floats into hashmaps.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Hashablef64(F64AsU);
+pub struct HashableF64(F64AsU);
 
-impl Hashablef64 {
+impl HashableF64 {
     fn from_float(f: f64) -> Self {
-        Hashablef64(unsafe { std::mem::transmute::<f64, F64AsU>(f) })
+        HashableF64(unsafe { std::mem::transmute::<f64, F64AsU>(f) })
     }
     #[allow(dead_code)]
     fn to_float(&self) -> f64 {

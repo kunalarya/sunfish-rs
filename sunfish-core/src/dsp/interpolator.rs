@@ -4,14 +4,13 @@ use std::collections::HashMap;
 #[allow(unused_imports)]
 use log::{info, trace, warn};
 
-use crate::common::Float;
 use crate::dsp::interpolation;
-use crate::dsp::synthesis::osc::{Unison, WaveShape};
-use crate::dsp::{normalize, HashableFloat, TAU};
+use crate::dsp::osc::{Unison, WaveShape};
+use crate::dsp::{normalize, HashableF64, TAU};
 use crate::util::note_freq;
 
 type ShapeKey = u8;
-type RefCache = HashMap<(ShapeKey, HashableFloat), Vec<Float>>;
+type RefCache = HashMap<(ShapeKey, HashableF64), Vec<f64>>;
 
 const SOFT_SAW_HARMONICS: usize = 8;
 const HARD_SAW_HARMONICS: usize = 64;
@@ -19,15 +18,15 @@ const HARD_SAW_HARMONICS: usize = 64;
 // Cache the generated/interpolated waveform.
 #[derive(Clone, Debug)]
 pub struct CachedWaveform {
-    ref_freq: Float,
-    last_phase: Float,
-    last_phase2: Float,
-    last_phase3: Float,
-    last_phase4: Float,
-    key: (ShapeKey, HashableFloat),
-    f_samples: Float,
-    f_samples2: Float,
-    ref_waveform_len: Float,
+    ref_freq: f64,
+    last_phase: f64,
+    last_phase2: f64,
+    last_phase3: f64,
+    last_phase4: f64,
+    key: (ShapeKey, HashableF64),
+    f_samples: f64,
+    f_samples2: f64,
+    ref_waveform_len: f64,
     last_unison: Unison,
 }
 
@@ -39,7 +38,7 @@ impl CachedWaveform {
             last_phase2: 0.0,
             last_phase3: 0.0,
             last_phase4: 0.0,
-            key: (0, HashableFloat::from_float(0.0)),
+            key: (0, HashableF64::from_float(0.0)),
             f_samples: 0.0,
             f_samples2: 0.0,
             ref_waveform_len: 0.0,
@@ -49,12 +48,7 @@ impl CachedWaveform {
 
     pub fn reset(&mut self) {
         self.ref_freq = 0.0;
-        // We'll skip resetting phase for now, since it's relative.
-        // self.last_phase = 0.0;
-        // self.last_phase2 = 0.0;
-        // self.last_phase3 = 0.0;
-        // self.last_phase4 = 0.0;
-        self.key = (0, HashableFloat::from_float(0.0));
+        self.key = (0, HashableF64::from_float(0.0));
         self.f_samples = 0.0;
         self.f_samples2 = 0.0;
         self.ref_waveform_len = 0.0;
@@ -64,25 +58,25 @@ impl CachedWaveform {
 
 pub struct Frequency {
     // Parameters associated with a single frequency.
-    f: Float,
-    amp: Float,
-    divisor: Float,
+    f: f64,
+    amp: f64,
+    divisor: f64,
 }
 
 impl Frequency {
-    pub fn new(f: Float, amp: Float, divisor: Float) -> Frequency {
+    pub fn new(f: f64, amp: f64, divisor: f64) -> Frequency {
         Frequency { f, amp, divisor }
     }
 }
 
 pub struct Interpolator {
-    sample_rate: Float,
+    sample_rate: f64,
     references: RefCache,
-    frequencies: Vec<Float>,
+    frequencies: Vec<f64>,
 }
 
 impl Interpolator {
-    pub fn new(sample_rate: Float) -> Self {
+    pub fn new(sample_rate: f64) -> Self {
         let dt = 1.0 / sample_rate;
         let (mut frequencies, references) = Self::prerender_waves(sample_rate, dt);
         frequencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -93,7 +87,7 @@ impl Interpolator {
         }
     }
 
-    fn factors(number: Float) -> Vec<u64> {
+    fn factors(number: f64) -> Vec<u64> {
         let target = number.ceil() as u64;
         (2..target + 1)
             .into_iter()
@@ -101,40 +95,27 @@ impl Interpolator {
             .collect()
     }
 
-    fn prerender_waves(sample_rate: Float, dt: Float) -> (Vec<Float>, RefCache) {
+    fn prerender_waves(sample_rate: f64, dt: f64) -> (Vec<f64>, RefCache) {
         // prerender all shapes.
         let mut cache: RefCache = HashMap::new();
 
         // How many semitones to step by when creating reference
         let midi_step = 4; // 3 per octave
-        let sample_rate_factors: Vec<Float> = Self::factors(sample_rate / 2.0)
+        let sample_rate_factors: Vec<f64> = Self::factors(sample_rate / 2.0)
             .into_iter()
-            .map(|x| x as Float)
+            .map(|x| x as f64)
             .collect();
 
-        let round_to_sample_rate = |f: Float| {
+        let round_to_sample_rate = |f: f64| {
             // Bias to lower frequency.
             let bias_up = false;
-            let result = closest_number_in(f, &sample_rate_factors, bias_up);
-            // println!("round_to_sample_rate: f={:.5}, map_to={:5}", f, result);
-            result
-
-            // Round up the the nearest sample rate value.
-            // println!(
-            //     "round_to_sample_rate: f={:.5}, f/sr={:.5} ceil(f/sr)={:.5}, scaled={:.5}",
-            //     f,
-            //     f / sample_rate,
-            //     (f / sample_rate).ceil(),
-            //     (f / sample_rate).ceil() * sample_rate
-            // );
-
-            // (f / sample_rate).ceil() * sample_rate
+            closest_number_in(f, &sample_rate_factors, bias_up)
         };
 
         // for each shape, render all fundamental frequencies for the mipmap.
         // Max frequency to render:
         let max_note = 70;
-        let all_freqs: Vec<Float> = (note_freq::MIDI_NOTE_MIN..max_note)
+        let all_freqs: Vec<f64> = (note_freq::MIDI_NOTE_MIN..max_note)
             .step_by(midi_step)
             .map(|note| *note_freq::NOTE_TO_FREQ.get(&note).unwrap())
             .map(round_to_sample_rate)
@@ -151,10 +132,10 @@ impl Interpolator {
     }
 
     fn prerender_all_pure_sines(
-        sample_rate: Float,
-        dt: Float,
+        sample_rate: f64,
+        dt: f64,
         cache: &mut RefCache,
-        fundamental_freqs: &[Float],
+        fundamental_freqs: &[f64],
     ) {
         /*
          * Pre-render pure sine waves containing only the fundamental frequencies.
@@ -162,7 +143,7 @@ impl Interpolator {
         let shape_key = WaveShape::Sine.value();
 
         for freq in fundamental_freqs.iter() {
-            let key = (shape_key, HashableFloat::from_float(*freq));
+            let key = (shape_key, HashableF64::from_float(*freq));
             cache.insert(
                 key,
                 Self::render_waves(sample_rate, dt, &[Frequency::new(*freq, 1.0, 1.0)]),
@@ -171,10 +152,10 @@ impl Interpolator {
     }
 
     fn prerender_all_soft_saws(
-        sample_rate: Float,
-        dt: Float,
+        sample_rate: f64,
+        dt: f64,
         cache: &mut RefCache,
-        fundamental_freqs: &[Float],
+        fundamental_freqs: &[f64],
     ) {
         let shape_key = WaveShape::SoftSaw.value();
         Self::prerender_saws(
@@ -188,10 +169,10 @@ impl Interpolator {
     }
 
     fn prerender_all_hard_saws(
-        sample_rate: Float,
-        dt: Float,
+        sample_rate: f64,
+        dt: f64,
         cache: &mut RefCache,
-        fundamental_freqs: &[Float],
+        fundamental_freqs: &[f64],
     ) {
         let shape_key = WaveShape::HardSaw.value();
         Self::prerender_saws(
@@ -205,10 +186,10 @@ impl Interpolator {
     }
 
     fn prerender_saws(
-        sample_rate: Float,
-        dt: Float,
+        sample_rate: f64,
+        dt: f64,
         cache: &mut RefCache,
-        fundamental_freqs: &[Float],
+        fundamental_freqs: &[f64],
         shape_key: u8,
         harmonics: usize,
     ) {
@@ -216,7 +197,7 @@ impl Interpolator {
          * Pre-render sawtooths with a handful of harmonics.
          */
 
-        fn get_amp(harmonic: usize) -> Float {
+        fn get_amp(harmonic: usize) -> f64 {
             if harmonic & 0x1 == 1 {
                 1.0
             } else {
@@ -225,19 +206,19 @@ impl Interpolator {
         }
 
         for freq in fundamental_freqs.iter() {
-            let key = (shape_key, HashableFloat::from_float(*freq));
+            let key = (shape_key, HashableF64::from_float(*freq));
 
             // TODO: Cut off harmonics close to Nyquist.
             let fparams: Vec<Frequency> = (1..=harmonics)
                 // Collect tuples of amplitude and frequency.
-                .map(|mult| Frequency::new(mult as Float * freq, get_amp(mult), mult as Float))
+                .map(|mult| Frequency::new(mult as f64 * freq, get_amp(mult), mult as f64))
                 .collect();
 
             cache.insert(key, Self::render_waves(sample_rate, dt, &fparams));
         }
     }
 
-    pub fn render_waves(sample_rate: Float, dt: Float, fparams: &[Frequency]) -> Vec<Float> {
+    pub fn render_waves(sample_rate: f64, dt: f64, fparams: &[Frequency]) -> Vec<f64> {
         // Render waves for the given frequencies, added together. Useful for constructing
         // pure tones, sawtooths, triangles, etc.
         //
@@ -254,13 +235,7 @@ impl Interpolator {
             println!("Warning: bad reference fundamental frequency; not a multiple of sample rate");
         }
 
-        let mut rendered: Vec<Float> = Vec::with_capacity(samples);
-
-        // println!(
-        //     "f0={:.3} nyquist={:.3} samples={:?}",
-        //     fundamental_freq, nyquist, samples,
-        // );
-
+        let mut rendered: Vec<f64> = Vec::with_capacity(samples);
         for i in 0..samples {
             let value = {
                 let mut v = 0.0;
@@ -275,7 +250,7 @@ impl Interpolator {
 
             rendered.push(value);
 
-            time = (i as Float) * dt;
+            time = (i as f64) * dt;
         }
         normalize(rendered)
     }
@@ -284,12 +259,12 @@ impl Interpolator {
     pub fn populate(
         &mut self,
         shape: WaveShape,
-        freq: Float,
-        mut output_buf: &mut [Float],
+        freq: f64,
+        mut output_buf: &mut [f64],
         output_count: usize,
         cache: &mut CachedWaveform,
         unison: Unison,
-        unison_amt: Float,
+        unison_amt: f64,
     ) {
         if freq == 0.0 {
             panic!("Zero frequency");
@@ -300,19 +275,7 @@ impl Interpolator {
             // Grab the next mipmap frequency.
             let bias_up = true;
             let ref_freq = closest_number_in(freq, &self.frequencies, bias_up);
-
-            // let ref_freq = {
-            //     let mut min_freq: Float = 1e10;
-            //     for f in &self.frequencies {
-            //         if *f < min_freq {
-            //             min_freq = *f;
-            //         }
-            //     }
-            //     min_freq
-            // };
-
-            // println!("freq={:?} ref_freq={:?}", freq, ref_freq);
-            let key = (shape.value(), HashableFloat::from_float(ref_freq));
+            let key = (shape.value(), HashableF64::from_float(ref_freq));
             cache.key = key;
             cache.f_samples = self.sample_rate / freq;
             cache.f_samples2 = if unison != Unison::Off {
@@ -324,7 +287,7 @@ impl Interpolator {
                 .references
                 .get(&cache.key)
                 .unwrap_or_else(|| panic!("Internal error"));
-            cache.ref_waveform_len = ref_waveform.len() as Float;
+            cache.ref_waveform_len = ref_waveform.len() as f64;
             cache.last_unison = unison;
             ref_waveform
         } else {
@@ -344,18 +307,6 @@ impl Interpolator {
                 output_count,           // output_count
             );
             (phase, 0.0)
-        } else if unison == Unison::U2 {
-            let phase = interpolation::interpolate_linear_inplace2(
-                &ref_waveform,          // input
-                cache.ref_waveform_len, // input_len_f
-                cache.last_phase,       // input_phase
-                cache.last_phase2,      // input_phase2
-                cache.f_samples,        // target_samples
-                cache.f_samples2,       // target_samples2
-                &mut output_buf,        // output_buf
-                output_count,           // output_count
-            );
-            (phase, 0.0)
         } else {
             (0.0, 0.0)
         };
@@ -365,7 +316,7 @@ impl Interpolator {
 }
 
 /// Find the closest frequency, biased either up or down.
-fn closest_number_in(search: Float, freqs: &[Float], bias_up: bool) -> Float {
+fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
     // Variation on binary search where we account for items in the range between points. To
     // accommodate this, we vary from traditional binary search by moving the first and last
     // markers to *inclusive* points.
@@ -377,11 +328,6 @@ fn closest_number_in(search: Float, freqs: &[Float], bias_up: bool) -> Float {
     let mut first = 0;
     let mut last = n - 1;
     let mut middle = n / 2;
-    //  println!(
-    //      "search={}, first={} middle={} last={}",
-    //      search, first, middle, last,
-    //  );
-    //
     if search < freqs[first] {
         return freqs[first];
     }
@@ -391,30 +337,15 @@ fn closest_number_in(search: Float, freqs: &[Float], bias_up: bool) -> Float {
 
     while last - first > 1 {
         let mid_value = freqs[middle];
-        //  println!(
-        //      "   first={} middle={} last={} mid_value={}",
-        //      first, middle, last, mid_value
-        //  );
-
         if search == mid_value {
-            //println!("   search={} == mid_value={}, returning", search, mid_value);
             return mid_value;
         } else if search > mid_value {
-            //println!(
-            //    "   search={} > mid_value={}, setting first={}",
-            //    search, mid_value, middle
-            //);
             first = middle;
         } else {
-            // println!(
-            //     "   search={} <= mid_value={}, setting last={}",
-            //     search, mid_value, middle
-            // );
             last = middle;
         }
 
         middle = (first + last) / 2;
-        // println!("   setting middle={}", middle);
     }
 
     let (i, j) = if bias_up {
@@ -469,7 +400,7 @@ mod test {
 
     #[test]
     fn factors() {
-        fn compute(num: Float) -> Vec<u64> {
+        fn compute(num: f64) -> Vec<u64> {
             let mut results = Interpolator::factors(num);
             results.sort_by(|a, b| a.partial_cmp(b).unwrap());
             results
