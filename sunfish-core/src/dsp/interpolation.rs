@@ -12,6 +12,7 @@ pub fn hermite_cubic_baseline(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
     a_ * t3 + b_ * t2 + c_ * t + d_
 }
 
+/// Wrap the index. Note that this needs to be compared against modulo integer performance.
 #[inline(always)]
 fn index_wrapped(length: isize, index: isize) -> usize {
     if index > length - 1 {
@@ -44,11 +45,7 @@ pub fn interpolate_hermite_inplace(
 ) -> f64 {
     let sig_len = input.len() as isize;
     let sig_len_f = input_len_f;
-    let mut phase = input_phase * target_samples;
-
-    if phase > target_samples {
-        phase = phase % target_samples;
-    }
+    let mut phase = (input_phase * target_samples) % target_samples;
 
     for output_index in 0..output_count {
         let percent = phase / target_samples;
@@ -63,73 +60,9 @@ pub fn interpolate_hermite_inplace(
         let c = input[index_wrapped(sig_len, index_isize + 1)];
         let d = input[index_wrapped(sig_len, index_isize + 2)];
         output_buf[output_index] = hermite_cubic_baseline(a, b, c, d, t);
-        phase += 1.0;
-        if phase > target_samples {
-            phase = phase % target_samples;
-        }
+        phase = (phase + 1.0) % target_samples;
     }
     phase / target_samples
-}
-
-pub fn interpolate_hermite_inplace2(
-    input: &Vec<f64>,
-    input_len_f: f64,
-    input_phase: f64,
-    input_phase2: f64,
-    target_samples: f64,
-    target_samples2: f64,
-    output_buf: &mut [f64],
-    output_count: usize,
-) -> (f64, f64) {
-    let sig_len = input.len() as isize;
-    let sig_len_f = input_len_f;
-    let mut phase = input_phase * target_samples;
-    let mut phase2 = input_phase2 * target_samples2;
-
-    if phase > target_samples {
-        phase = phase % target_samples;
-    }
-    if phase2 > target_samples2 {
-        phase2 = phase2 % target_samples2;
-    }
-
-    // This looks silly, but the goal is to exploit
-    // locality of reference, because we assume the two
-    // target_samples are close-enough in frequency.
-    for output_index in 0..output_count {
-        let percent = phase / target_samples;
-        let percent2 = phase2 / target_samples2;
-        let x = sig_len_f * percent;
-        let x2 = sig_len_f * percent2;
-
-        let index = x.floor();
-        let index2 = x2.floor();
-        let t = x - index;
-        let t2 = x2 - index2;
-
-        let index_isize = index as isize;
-        let index_isize2 = index2 as isize;
-        let a = input[index_wrapped(sig_len, index_isize - 1)];
-        let b = input[index_wrapped(sig_len, index_isize)];
-        let c = input[index_wrapped(sig_len, index_isize + 1)];
-        let d = input[index_wrapped(sig_len, index_isize + 2)];
-        let value = hermite_cubic_baseline(a, b, c, d, t);
-        let a2 = input[index_wrapped(sig_len, index_isize2 - 1)];
-        let b2 = input[index_wrapped(sig_len, index_isize2)];
-        let c2 = input[index_wrapped(sig_len, index_isize2 + 1)];
-        let d2 = input[index_wrapped(sig_len, index_isize2 + 2)];
-        let value = value + hermite_cubic_baseline(a2, b2, c2, d2, t2);
-        phase += 1.0;
-        phase2 += 1.0;
-        if phase > target_samples {
-            phase = phase % target_samples;
-        }
-        if phase2 > target_samples2 {
-            phase2 = phase2 % target_samples2;
-        }
-        output_buf[output_index] = value;
-    }
-    (phase / target_samples, phase2 / target_samples2)
 }
 
 pub fn interpolate_linear_inplace(
@@ -141,13 +74,9 @@ pub fn interpolate_linear_inplace(
     output_count: usize,
 ) -> f64 {
     let ref_len = reference.len() as isize;
-    let mut phase = input_phase;
+    let mut phase = input_phase % 1.0;
 
     let phase_dt = 1.0 / desired_samples;
-
-    if phase > 1.0 {
-        phase = phase % 1.0;
-    }
     // Subtract one because:
     // Say ref len is 4:    x --- x --- x --- x
     // & desired len is 3:  x ------ x ------ x
@@ -169,75 +98,11 @@ pub fn interpolate_linear_inplace(
         let eta = ref_index - ref_index_floor;
 
         let ref_index_floor_i = ref_index_floor as isize;
-        // println!(
-        //     "   phase={:.3} ref_index={:.3} ref_index_floor={:.3} (i={}) eta={:.3}",
-        //     phase, ref_index, ref_index_floor, ref_index_floor_i, eta,
-        // );
         let a = reference[index_wrapped(ref_len, ref_index_floor_i)];
         let b = reference[index_wrapped(ref_len, ref_index_floor_i + 1)];
 
         output_buf[output_index] = ((1.0 - eta) * a) + (eta * b);
-        // phase = (output_index as f64 * phase_dt) % 1.0;
-        phase += phase_dt;
-        if phase > 1.0 {
-            phase = phase % 1.0;
-        }
-    }
-    phase
-}
-
-pub fn interpolate_linear_inplace2(
-    reference: &Vec<f64>,
-    ref_len_f: f64,
-    input_phase: f64,
-    input_phase2: f64,
-    desired_samples: f64,
-    desired_samples2: f64,
-    output_buf: &mut [f64],
-    output_count: usize,
-) -> f64 {
-    let ref_len = reference.len() as isize;
-    let mut phase = input_phase;
-    let mut phase2 = input_phase2;
-
-    let phase_dt = 1.0 / desired_samples;
-    let phase2_dt = 1.0 / desired_samples2;
-
-    if phase > 1.0 {
-        phase = phase % 1.0;
-    }
-    if phase2 > 1.0 {
-        phase2 = phase2 % 1.0;
-    }
-    let ref_len_n_minus_1 = ref_len_f - 1.0;
-    for output_index in 0..output_count {
-        let ref_index = ref_len_n_minus_1 * phase;
-        let ref_index_floor = ref_index.floor();
-
-        let ref_index2 = ref_len_n_minus_1 * phase2;
-        let ref_index_floor2 = ref_index2.floor();
-
-        let eta = ref_index - ref_index_floor;
-        let eta2 = ref_index2 - ref_index_floor2;
-
-        let ref_index_floor_i = ref_index_floor as isize;
-        let ref_index_floor2_i = ref_index_floor2 as isize;
-        let a = reference[index_wrapped(ref_len, ref_index_floor_i)];
-        let b = reference[index_wrapped(ref_len, ref_index_floor_i + 1)];
-        let value1 = ((1.0 - eta) * a) + (eta * b);
-
-        let a2 = reference[index_wrapped(ref_len, ref_index_floor2_i)];
-        let b2 = reference[index_wrapped(ref_len, ref_index_floor2_i + 1)];
-        let value2 = ((1.0 - eta2) * a2) + (eta2 * b2);
-        output_buf[output_index] = value1 + value2;
-        phase += phase_dt;
-        phase2 += phase2_dt;
-        if phase > 1.0 {
-            phase = phase % 1.0;
-        }
-        if phase2 > 1.0 {
-            phase2 = phase2 % 1.0;
-        }
+        phase = (phase + phase_dt) % 1.0;
     }
     phase
 }

@@ -3,12 +3,6 @@ pub mod errors;
 pub mod note_freq;
 pub mod test_utils;
 
-/// Simple Either Monad.
-pub enum Either<A, B> {
-    A(A),
-    B(B),
-}
-
 // From freeverb.c
 // #define undenormalize(n) { if (xabs(n) < 1e-37) { (n) = 0; } }
 #[inline(always)]

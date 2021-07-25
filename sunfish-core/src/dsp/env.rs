@@ -1,5 +1,4 @@
-// Envelope generator.
-
+/// Envelope generator.
 use serde::Deserialize;
 
 use crate::util;
@@ -55,9 +54,9 @@ pub struct Env {
 }
 
 /*
- * Envelopes are generated using a coefficient that approximates exponential
- * decay. Since the heuristics don't work well with nonzero start/ends, we
- * compute a base level, then apply a scale and offset.
+ * Envelopes are generated using a coefficient that approximates exponential decay. Since the
+ * heuristics don't work well with nonzero start/ends, we compute a base level, then apply a scale
+ * and offset.
  */
 impl Env {
     pub fn new(adsr: ADSR, sample_rate: f64) -> Env {
@@ -73,7 +72,6 @@ impl Env {
 
     pub fn next(&mut self) {
         util::undenormalize(&mut self.level);
-        // util::undenormalize(&mut self.filtered_level);
         if let Some(target_level) = self.target_level_opt {
             match self.stage {
                 ADSRStage::Attack => {

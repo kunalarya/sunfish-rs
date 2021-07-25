@@ -7,7 +7,10 @@ use crate::util;
 use crate::util::enumerable::Enumerable;
 
 // TODO: Investigate ideal stable slew rate.
+
+/// Slew rate, in Hz, for smoothing out filter parameters and avoiding instability regions.
 const SLEW_RATE_HZ: f64 = 1000.0;
+/// Slew rate, in seconds, for parameter smoothing.
 const SLEW_RATE_S: f64 = 1.0 / SLEW_RATE_HZ;
 const SLEW_THRESHOLD_SEMIS: f64 = 0.001;
 const SLEW_THRESHOLD_RES: f64 = 0.001;
@@ -66,8 +69,8 @@ impl FilterMode {
     }
 }
 
-// We will process filters over vectors; we only need to store
-// the last two input and output points.
+// We will process filters over vectors; we only need to store the last two input and output
+// points.
 #[derive(Debug)]
 pub struct Filter {
     coeffs: BiquadCoefs,
@@ -110,16 +113,19 @@ impl Filter {
         inst
     }
 
+    /// Update the filter mode (i.e. low-pass, high-pass, etc.)
     pub fn set_mode(&mut self, mode: &FilterMode) {
         self.mode = *mode;
         self.update_coeff();
     }
 
+    /// Update the cutoff frequency, specified in semitones.
     pub fn set_cutoff(&mut self, cutoff_semi: f64) {
         self.cutoff_semi = cutoff_semi;
         self.cutoff_semi_srl.update(cutoff_semi);
     }
 
+    /// Update the resonance.
     pub fn set_resonance(&mut self, resonance: f64) {
         self.resonance = resonance;
         self.resonance_srl.update(resonance);
@@ -144,6 +150,7 @@ impl Filter {
         };
     }
 
+    /// Apply the filter to the given input signal.
     pub fn apply(&mut self, input: f64) -> f64 {
         // Determine if we need to update
         let cutoff_changed = self.cutoff_semi_srl.step();
