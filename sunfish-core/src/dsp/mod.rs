@@ -17,11 +17,12 @@ pub struct HashableF64(F64AsU);
 
 impl HashableF64 {
     fn from_float(f: f64) -> Self {
-        HashableF64(unsafe { std::mem::transmute::<f64, F64AsU>(f) })
+        HashableF64(f.to_bits())
     }
+    #[allow(clippy::wrong_self_convention)]
     #[allow(dead_code)]
     fn to_float(&self) -> f64 {
-        unsafe { std::mem::transmute::<F64AsU, f64>(self.0) }
+        f64::from_bits(self.0)
     }
 }
 
@@ -32,7 +33,7 @@ fn normalize(mut signal: Vec<f64>) -> Vec<f64> {
             let res: f64 = f.abs();
             res
         })
-        .fold(0. / 0., f64::max);
+        .fold(f64::NAN, f64::max);
     signal.drain(..).map(|f| f / max).collect()
 }
 

@@ -80,7 +80,7 @@ impl BiquadCoefs {
 }
 
 pub fn biquad_direct_form(
-    signal: &Vec<f64>,
+    signal: &[f64],
     coefficients: &BiquadCoefs,
     prev_xn1: f64,
     prev_xn2: f64,
@@ -89,6 +89,7 @@ pub fn biquad_direct_form(
 ) -> Vec<f64> {
     let mut output = Vec::with_capacity(signal.len());
     let BiquadCoefs { c0, c1, c2, c3, c4 } = coefficients;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..signal.len() {
         let xn1;
         let xn2;
@@ -132,6 +133,7 @@ pub fn biquad_direct_form_in_place(
     let mut yn2 = prev_yn2;
     let mut xn1 = prev_xn1;
     let mut xn2 = prev_xn2;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..signal.len() {
         // Shift inputs.
         let xn = signal[i];

@@ -1,3 +1,4 @@
+#[allow(clippy::many_single_char_names)]
 #[inline]
 pub fn hermite_cubic_baseline(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
     let d2_ = d / 2.0;
@@ -35,8 +36,9 @@ fn index_wrapped(length: isize, index: isize) -> usize {
 /// `output_buf`: Output buffer to write to.
 /// `output_count`: Number of output samples to write.
 ///     If the buffer is not large enough, this will panic.
+#[allow(clippy::many_single_char_names)]
 pub fn interpolate_hermite_inplace(
-    input: &Vec<f64>,
+    input: &[f64],
     input_len_f: f64,
     input_phase: f64,
     target_samples: f64,
@@ -47,6 +49,7 @@ pub fn interpolate_hermite_inplace(
     let sig_len_f = input_len_f;
     let mut phase = (input_phase * target_samples) % target_samples;
 
+    #[allow(clippy::needless_range_loop)]
     for output_index in 0..output_count {
         let percent = phase / target_samples;
         let x = sig_len_f * percent;
@@ -66,7 +69,7 @@ pub fn interpolate_hermite_inplace(
 }
 
 pub fn interpolate_linear_inplace(
-    reference: &Vec<f64>,
+    reference: &[f64],
     ref_len_f: f64,
     input_phase: f64,
     desired_samples: f64,
@@ -88,6 +91,7 @@ pub fn interpolate_linear_inplace(
     // Lagrange interpolation, which interpolates points given N + 1
     // samples.
     let ref_len_n_minus_1 = ref_len_f - 1.0;
+    #[allow(clippy::needless_range_loop)]
     for output_index in 0..output_count {
         // We use ref_len_f - 1 because we treat the last
         // datapoint in the reference signal as an endpoint.
@@ -117,7 +121,8 @@ fn index_clamped(length: usize, index: usize) -> usize {
 }
 
 // Reference/baseline implementation. Do not use in real-time path.
-pub fn interpolate_hermite(input: &Vec<f64>, samples: usize) -> Vec<f64> {
+#[allow(clippy::many_single_char_names)]
+pub fn interpolate_hermite(input: &[f64], samples: usize) -> Vec<f64> {
     let sig_len = input.len();
     let mut output: Vec<f64> = Vec::with_capacity(sig_len);
     let num_samp_f = (samples - 1) as f64;
@@ -134,7 +139,7 @@ pub fn interpolate_hermite(input: &Vec<f64>, samples: usize) -> Vec<f64> {
         let index_usize = index as usize;
         let prev_index = if index_usize == 0 { 0 } else { index_usize - 1 };
         let a = input[prev_index];
-        let b = input[index_clamped(sig_len, index_usize + 0)];
+        let b = input[index_clamped(sig_len, index_usize)];
         let c = input[index_clamped(sig_len, index_usize + 1)];
         let d = input[index_clamped(sig_len, index_usize + 2)];
 

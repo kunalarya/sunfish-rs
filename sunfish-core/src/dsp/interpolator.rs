@@ -231,6 +231,7 @@ impl Interpolator {
         let samples_float_rounded = samples_float.round();
         let samples = samples_float_rounded as usize;
 
+        #[allow(clippy::float_cmp)]
         if samples_float != samples_float_rounded {
             println!("Warning: bad reference fundamental frequency; not a multiple of sample rate");
         }
@@ -256,6 +257,7 @@ impl Interpolator {
     }
 
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub fn populate(
         &mut self,
         shape: WaveShape,
@@ -271,6 +273,7 @@ impl Interpolator {
         }
         let ref_freq = cache.ref_freq;
         let last_unison = cache.last_unison;
+        #[allow(clippy::float_cmp)]
         let ref_waveform = if ref_freq != freq || unison != last_unison {
             // Grab the next mipmap frequency.
             let bias_up = true;
@@ -299,7 +302,7 @@ impl Interpolator {
         // Render a new waveform.
         let (phase, phase2) = if unison == Unison::Off {
             let phase = interpolation::interpolate_linear_inplace(
-                &ref_waveform,          // input
+                ref_waveform,           // input
                 cache.ref_waveform_len, // input_len_f
                 cache.last_phase,       // input_phase
                 cache.f_samples,        // target_samples
@@ -337,6 +340,7 @@ fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
 
     while last - first > 1 {
         let mid_value = freqs[middle];
+        #[allow(clippy::float_cmp)]
         if search == mid_value {
             return mid_value;
         } else if search > mid_value {
@@ -353,6 +357,7 @@ fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
     } else {
         (first, last)
     };
+    #[allow(clippy::float_cmp)]
     if freqs[i] == search {
         freqs[i]
     } else {

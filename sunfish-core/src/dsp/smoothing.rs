@@ -40,6 +40,7 @@ impl SlewRateLimiter {
         }
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn step(&mut self) -> bool {
         let last_filtered_value = self.filtered_value;
         self.filtered_value = self.filter.process(self.user_value);
