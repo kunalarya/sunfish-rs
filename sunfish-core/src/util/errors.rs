@@ -21,7 +21,7 @@ pub fn setup_panic_handling() {
             panic_info
                 .payload()
                 .downcast_ref::<&str>()
-                .map(|s| *s)
+                .copied()
                 .unwrap_or("<cause unknown>")
         });
 

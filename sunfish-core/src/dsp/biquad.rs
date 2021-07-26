@@ -80,7 +80,7 @@ impl BiquadCoefs {
 }
 
 pub fn biquad_direct_form(
-    signal: &Vec<f64>,
+    signal: &[f64],
     coefficients: &BiquadCoefs,
     prev_xn1: f64,
     prev_xn2: f64,
@@ -89,6 +89,7 @@ pub fn biquad_direct_form(
 ) -> Vec<f64> {
     let mut output = Vec::with_capacity(signal.len());
     let BiquadCoefs { c0, c1, c2, c3, c4 } = coefficients;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..signal.len() {
         let xn1;
         let xn2;
@@ -132,6 +133,7 @@ pub fn biquad_direct_form_in_place(
     let mut yn2 = prev_yn2;
     let mut xn1 = prev_xn1;
     let mut xn2 = prev_xn2;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..signal.len() {
         // Shift inputs.
         let xn = signal[i];
@@ -162,7 +164,7 @@ pub fn biquad_direct_form_apply(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::util::test_utils::assert_similar;
+    use crate::util::test_utils::assert_similar_f64;
 
     const SAMPLING_RATE: f64 = 44100.0;
 
@@ -174,10 +176,11 @@ mod test {
         let test_signal = vec![1.0, 2.0, 0.5, 1.5, 2.5, -0.5, -1.0, 1.25];
         let result = biquad_direct_form(&test_signal, &coeffs, 0.0, 0.0, 0.0, 0.0);
         let expected = vec![
-            0.00007667, 0.00045867, 0.00125562, 0.00238343, 0.00395107, 0.00595044, 0.00795181,
-            0.00982036,
+            0.00007667, 0.00045868, 0.00125563, 0.00238347, 0.00395112, 0.00595053, 0.00795192,
+            0.00982049,
         ];
-        assert_similar(&result, &expected);
+        println!("{:?}", result);
+        assert_similar_f64(&result, &expected, 1e8);
     }
 
     #[test]
@@ -202,10 +205,10 @@ mod test {
             yn1 = y;
         }
         let expected = vec![
-            0.00007667, 0.00045867, 0.00125562, 0.00238343, 0.00395107, 0.00595044, 0.00795181,
-            0.00982036,
+            0.00007667, 0.00045868, 0.00125563, 0.00238347, 0.00395112, 0.00595053, 0.00795192,
+            0.00982049,
         ];
-        assert_similar(&result, &expected);
+        assert_similar_f64(&result, &expected, 1e8);
     }
 
     #[test]
@@ -216,9 +219,9 @@ mod test {
         let mut test_signal = vec![1.0, 2.0, 0.5, 1.5, 2.5, -0.5, -1.0, 1.25];
         biquad_direct_form_in_place(&mut test_signal, &coeffs, 0.0, 0.0, 0.0, 0.0);
         let expected = vec![
-            0.00007667, 0.00045867, 0.00125562, 0.00238343, 0.00395107, 0.00595044, 0.00795181,
-            0.00982036,
+            0.00007667, 0.00045868, 0.00125563, 0.00238347, 0.00395112, 0.00595053, 0.00795192,
+            0.00982049,
         ];
-        assert_similar(&test_signal, &expected);
+        assert_similar_f64(&test_signal, &expected, 1e8);
     }
 }

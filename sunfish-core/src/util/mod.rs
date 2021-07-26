@@ -43,7 +43,7 @@ pub fn semitones_to_frequency(semitones: f64, min_hz: f64) -> f64 {
     // n/12 = log2 (freq / freq_base).
     // 2^(n/12) = freq / freq_base
     // freq_base * (2^(n/12)) = freq
-    min_hz * (2.0 as f64).powf(semitones / 12.0)
+    min_hz * (2.0f64).powf(semitones / 12.0)
 }
 
 pub fn frequency_to_semitones(freq_hz: f64, min_hz: f64) -> f64 {

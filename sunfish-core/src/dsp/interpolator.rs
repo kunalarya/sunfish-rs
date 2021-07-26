@@ -231,6 +231,7 @@ impl Interpolator {
         let samples_float_rounded = samples_float.round();
         let samples = samples_float_rounded as usize;
 
+        #[allow(clippy::float_cmp)]
         if samples_float != samples_float_rounded {
             println!("Warning: bad reference fundamental frequency; not a multiple of sample rate");
         }
@@ -256,6 +257,7 @@ impl Interpolator {
     }
 
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub fn populate(
         &mut self,
         shape: WaveShape,
@@ -271,6 +273,7 @@ impl Interpolator {
         }
         let ref_freq = cache.ref_freq;
         let last_unison = cache.last_unison;
+        #[allow(clippy::float_cmp)]
         let ref_waveform = if ref_freq != freq || unison != last_unison {
             // Grab the next mipmap frequency.
             let bias_up = true;
@@ -299,7 +302,7 @@ impl Interpolator {
         // Render a new waveform.
         let (phase, phase2) = if unison == Unison::Off {
             let phase = interpolation::interpolate_linear_inplace(
-                &ref_waveform,          // input
+                ref_waveform,           // input
                 cache.ref_waveform_len, // input_len_f
                 cache.last_phase,       // input_phase
                 cache.f_samples,        // target_samples
@@ -337,6 +340,7 @@ fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
 
     while last - first > 1 {
         let mid_value = freqs[middle];
+        #[allow(clippy::float_cmp)]
         if search == mid_value {
             return mid_value;
         } else if search > mid_value {
@@ -353,6 +357,7 @@ fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
     } else {
         (first, last)
     };
+    #[allow(clippy::float_cmp)]
     if freqs[i] == search {
         freqs[i]
     } else {
@@ -409,7 +414,7 @@ mod test {
         assert_eq!(
             compute(44100.0),
             vec![
-                1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 14, 15, 18, 20, 21, 25, 28, 30, 35, 36, 42, 45, 49,
+                2, 3, 4, 5, 6, 7, 9, 10, 12, 14, 15, 18, 20, 21, 25, 28, 30, 35, 36, 42, 45, 49,
                 50, 60, 63, 70, 75, 84, 90, 98, 100, 105, 126, 140, 147, 150, 175, 180, 196, 210,
                 225, 245, 252, 294, 300, 315, 350, 420, 441, 450, 490, 525, 588, 630, 700, 735,
                 882, 900, 980, 1050, 1225, 1260, 1470, 1575, 1764, 2100, 2205, 2450, 2940, 3150,
