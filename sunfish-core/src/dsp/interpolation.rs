@@ -147,7 +147,7 @@ pub fn interpolate_hermite(input: &Vec<f64>, samples: usize) -> Vec<f64> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::util::test_utils::assert_similar;
+    use crate::util::test_utils::assert_similar_f64;
 
     #[test]
     fn hermite_cubic_baseline() {
@@ -155,10 +155,10 @@ mod test {
         let num_samples = 15;
         let intp = interpolate_hermite(&points, num_samples);
         let expected = vec![
-            0.0, 0.62099135, 1.4046648, 1.8510205, 2.089796, 2.448688, 2.9874635, 3.5, 3.8288631,
-            4.1472306, 4.719242, 5.4705544, 6.073178, 6.513994, 6.8,
+            0.0, 0.62099125, 1.40466472, 1.85102041, 2.08979592, 2.44868805, 2.98746356, 3.5,
+            3.82886297, 4.14723032, 4.71924198, 5.47055394, 6.07317784, 6.51399417, 6.8,
         ];
-        assert_similar(&intp, &expected);
+        assert_similar_f64(&intp, &expected, 1e8);
     }
 
     #[test]

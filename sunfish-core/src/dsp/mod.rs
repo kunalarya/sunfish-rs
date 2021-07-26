@@ -45,13 +45,13 @@ mod tests {
     fn normalize_negative() {
         let v: Vec<f64> = vec![-2.0, 0.0, 1.0];
         let normalized = normalize(v);
-        test_utils::assert_similar(&normalized, &vec![-1.0, 0.0, 0.5]);
+        test_utils::assert_similar_f64(&normalized, &vec![-1.0, 0.0, 0.5], 1e8);
     }
 
     #[test]
     fn normalize_positive() {
         let v: Vec<f64> = vec![-2.0, 0.0, 4.0];
         let normalized = normalize(v);
-        test_utils::assert_similar(&normalized, &vec![-0.5, 0.0, 1.0]);
+        test_utils::assert_similar_f64(&normalized, &vec![-0.5, 0.0, 1.0], 1e8);
     }
 }
