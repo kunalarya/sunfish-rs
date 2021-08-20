@@ -11,4 +11,5 @@ debug = true
 [dependencies]
 lazy_static = "1.4.0"
 log = "0.4.*"
+num = "0.2.0"
 serde = { version = "1.0.60", features = ["serde_derive"] }
