@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::lfo;
 use crate::modulation::target::ModulationTarget;
 use crate::params::{EFiltParams, ELfoParams, EOscParams, EParam};
-use crate::params::{SunfishParams, SunfishParamsVstMeta};
+use crate::params::{SunfishParams, SunfishParamsMeta};
 use crate::swarc;
 
 const MOD_TICK_HZ: f64 = 200.0; // 5 ms.
@@ -85,7 +85,7 @@ pub struct ParamSet {
     pub modulated: swarc::ArcReader<SunfishParams>,
     pub modulated_writer: swarc::ArcWriter<SunfishParams>,
     // Metadata (ranges, linear, log, etc.)
-    pub meta: SunfishParamsVstMeta,
+    pub meta: SunfishParamsMeta,
 }
 
 impl ParamSet {
@@ -94,7 +94,7 @@ impl ParamSet {
         let modulated_params = baseline_params.clone();
         let (baseline_writer, baseline) = swarc::new(baseline_params);
         let (modulated_writer, modulated) = swarc::new(modulated_params);
-        let meta = SunfishParamsVstMeta::new();
+        let meta = SunfishParamsMeta::new();
 
         ParamSet {
             name,
@@ -301,7 +301,7 @@ pub fn modulate(
 
 pub fn update_mod_range(
     mod_state: &mut ModState,
-    meta: &SunfishParamsVstMeta,
+    meta: &SunfishParamsMeta,
     mod_index: usize,
     target: ModulationTarget,
 ) {

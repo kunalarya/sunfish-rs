@@ -71,7 +71,7 @@ pub struct OscParams {
 impl OscParams {
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EOscParams,
         new_value: f64,
     ) -> Result<(), ()> {
@@ -112,7 +112,7 @@ impl OscParams {
 
     fn get_param_normalized(
         &self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EOscParams,
     ) -> Result<f64, ()> {
         Ok(match eparam {
@@ -143,7 +143,7 @@ impl OscParams {
         })
     }
 
-    fn format_value(&self, meta: &SunfishParamsVstMeta, eparam: EOscParams) -> Result<String, ()> {
+    fn format_value(&self, meta: &SunfishParamsMeta, eparam: EOscParams) -> Result<String, ()> {
         Ok(match eparam {
             EOscParams::Enabled => meta.osc_enabled_meta.1.format_value(self.enabled),
             EOscParams::Shape => meta.osc_shape_meta.1.format_value(self.shape),
@@ -192,7 +192,7 @@ pub struct FilterParams {
 impl FilterParams {
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EFiltParams,
         new_value: f64,
     ) -> Result<(), ()> {
@@ -218,7 +218,7 @@ impl FilterParams {
 
     fn get_param_normalized(
         &self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EFiltParams,
     ) -> Result<f64, ()> {
         Ok(match eparam {
@@ -230,7 +230,7 @@ impl FilterParams {
         })
     }
 
-    fn format_value(&self, meta: &SunfishParamsVstMeta, eparam: EFiltParams) -> Result<String, ()> {
+    fn format_value(&self, meta: &SunfishParamsMeta, eparam: EFiltParams) -> Result<String, ()> {
         Ok(match eparam {
             EFiltParams::Enable => meta.filter_enable_meta.1.format_value(self.enable),
             EFiltParams::Cutoff => meta.cutoff_meta.1.format_value(self.cutoff_semi),
@@ -256,7 +256,7 @@ impl Default for FilterParams {
 impl ADSR {
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EAdsrParams,
         new_value: f64,
     ) -> Result<(), ()> {
@@ -278,7 +278,7 @@ impl ADSR {
     }
     fn get_param_normalized(
         &self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EAdsrParams,
     ) -> Result<f64, ()> {
         Ok(match eparam {
@@ -288,7 +288,7 @@ impl ADSR {
             EAdsrParams::Release => meta.release_meta.0.value_to_vst_float(self.release),
         })
     }
-    fn format_value(&self, meta: &SunfishParamsVstMeta, eparam: EAdsrParams) -> Result<String, ()> {
+    fn format_value(&self, meta: &SunfishParamsMeta, eparam: EAdsrParams) -> Result<String, ()> {
         Ok(match eparam {
             EAdsrParams::Attack => meta.attack_meta.1.format_value(self.attack),
             EAdsrParams::Decay => meta.decay_meta.1.format_value(self.decay),
@@ -310,7 +310,7 @@ pub struct LfoParams {
 impl LfoParams {
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: ELfoParams,
         new_value: f64,
     ) -> Result<(), ()> {
@@ -340,7 +340,7 @@ impl LfoParams {
     }
     fn get_param_normalized(
         &self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: ELfoParams,
     ) -> Result<f64, ()> {
         Ok(match eparam {
@@ -356,7 +356,7 @@ impl LfoParams {
             ELfoParams::Amt => meta.mod_amt_meta.0.value_to_vst_float(self.amt),
         })
     }
-    fn format_value(&self, meta: &SunfishParamsVstMeta, eparam: ELfoParams) -> Result<String, ()> {
+    fn format_value(&self, meta: &SunfishParamsMeta, eparam: ELfoParams) -> Result<String, ()> {
         Ok(match eparam {
             ELfoParams::Target => meta.mod_target_meta.1.format_value(self.target),
             ELfoParams::Shape => meta.mod_shape_meta.1.format_value(self.shape),
@@ -610,7 +610,7 @@ impl ParamMeta {
 
 // Stores all of the Metadata associated with the parameters.
 #[derive(Clone, Debug)]
-pub struct SunfishParamsVstMeta {
+pub struct SunfishParamsMeta {
     // These are classes of parameters:
 
     // Oscillators
@@ -653,7 +653,7 @@ pub struct SunfishParamsVstMeta {
     params: HashMap<EParam, ParamMeta>,
 }
 
-impl SunfishParamsVstMeta {
+impl SunfishParamsMeta {
     pub fn new() -> Self {
         /*
          * The VST interface retrieves parameters by index. Additionally, we would like to store
@@ -685,7 +685,7 @@ impl SunfishParamsVstMeta {
             let paramlist: Vec<EParam> = param_metas.iter().map(|(eparam, _)| *eparam).collect();
             (paramlist, param_to_index, m)
         };
-        SunfishParamsVstMeta {
+        SunfishParamsMeta {
             // Oscillators
             osc_enabled_meta: (Boolean::new(), BoolOnOffFormatter()),
             osc_shape_meta: (Enum::new(WaveShape::enumerate()), StringFormatter()),
@@ -763,38 +763,38 @@ impl SunfishParams {
     }
 }
 
-pub trait VstParams {
+pub trait NormalizedParams {
     fn update_param_by_index(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         index: usize,
         new_value: f64,
     ) -> Result<EParam, ()>;
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EParam,
         new_value: f64,
     ) -> Result<(), ()>;
-    fn get_param_by_index(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<f64, ()>;
-    fn get_param_normalized(&self, meta: &SunfishParamsVstMeta, eparam: EParam) -> Result<f64, ()>;
-    fn index_param(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<EParam, ()>;
-    fn get_name(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<String, ()>;
-    fn formatted_value(&self, meta: &SunfishParamsVstMeta, eparam: EParam) -> Result<String, ()>;
+    fn get_param_by_index(&self, meta: &SunfishParamsMeta, index: usize) -> Result<f64, ()>;
+    fn get_param_normalized(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<f64, ()>;
+    fn index_param(&self, meta: &SunfishParamsMeta, index: usize) -> Result<EParam, ()>;
+    fn get_name(&self, meta: &SunfishParamsMeta, index: usize) -> Result<String, ()>;
+    fn formatted_value(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<String, ()>;
     fn formatted_value_by_index(
         &self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         index: usize,
     ) -> Result<String, ()> {
         self.formatted_value(meta, self.index_param(meta, index)?)
     }
 }
 
-impl VstParams for SunfishParams {
+impl NormalizedParams for SunfishParams {
     /// Update parameters from VST values, i.e. between 0.0 and 1.0.
     fn update_param_by_index(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         index: usize,
         mut new_value: f64,
     ) -> Result<EParam, ()> {
@@ -812,12 +812,12 @@ impl VstParams for SunfishParams {
         Ok(eparam)
     }
 
-    fn get_param_by_index(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<f64, ()> {
+    fn get_param_by_index(&self, meta: &SunfishParamsMeta, index: usize) -> Result<f64, ()> {
         let eparam = self.index_param(meta, index)?;
         self.get_param_normalized(meta, eparam)
     }
 
-    fn index_param(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<EParam, ()> {
+    fn index_param(&self, meta: &SunfishParamsMeta, index: usize) -> Result<EParam, ()> {
         if index < meta.paramlist.len() {
             Ok(meta.paramlist[index])
         } else {
@@ -825,7 +825,7 @@ impl VstParams for SunfishParams {
         }
     }
 
-    fn get_name(&self, meta: &SunfishParamsVstMeta, index: usize) -> Result<String, ()> {
+    fn get_name(&self, meta: &SunfishParamsMeta, index: usize) -> Result<String, ()> {
         let eparam = self.index_param(meta, index)?;
         if let Some(param_meta) = meta.params.get(&eparam) {
             Ok(param_meta.name.clone())
@@ -836,7 +836,7 @@ impl VstParams for SunfishParams {
 
     fn update_param(
         &mut self,
-        meta: &SunfishParamsVstMeta,
+        meta: &SunfishParamsMeta,
         eparam: EParam,
         new_value: f64,
     ) -> Result<(), ()> {
@@ -873,7 +873,7 @@ impl VstParams for SunfishParams {
         Ok(())
     }
 
-    fn get_param_normalized(&self, meta: &SunfishParamsVstMeta, eparam: EParam) -> Result<f64, ()> {
+    fn get_param_normalized(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<f64, ()> {
         // Return 1-normalized value.
         Ok(match eparam {
             EParam::Osc1(osc_param) => self.osc1.get_param_normalized(&meta, osc_param)?,
@@ -888,7 +888,7 @@ impl VstParams for SunfishParams {
         })
     }
 
-    fn formatted_value(&self, meta: &SunfishParamsVstMeta, eparam: EParam) -> Result<String, ()> {
+    fn formatted_value(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<String, ()> {
         let result = match eparam {
             EParam::Osc1(osc_param) => self.osc1.format_value(&meta, osc_param)?,
             EParam::Osc2(osc_param) => self.osc2.format_value(&meta, osc_param)?,
