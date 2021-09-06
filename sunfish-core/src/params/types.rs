@@ -9,6 +9,7 @@ pub trait ParamType<T> {
 pub struct Boolean;
 
 impl Boolean {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Boolean {}
     }

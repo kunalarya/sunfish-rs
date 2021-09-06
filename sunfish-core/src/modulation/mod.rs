@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::lfo;
 use crate::modulation::target::ModulationTarget;
 use crate::params::{EFiltParams, ELfoParams, EOscParams, EParam};
-use crate::params::{SunfishParams, SunfishParamsVstMeta};
+use crate::params::{SunfishParams, SunfishParamsMeta};
 use crate::swarc;
 
 const MOD_TICK_HZ: f64 = 200.0; // 5 ms.
@@ -42,6 +42,8 @@ impl ModState {
         self.mod_tick = MOD_TICK_S * (1.0 / sample_rate);
     }
 
+    /// Tick the modulator; if enough time has passed to trigger an actual modulation tick, return
+    /// the time elapsed since the last tick.
     pub fn tick(&mut self, delta: f64) -> Option<f64> {
         self.mod_time_elapsed += delta;
         if self.mod_time_elapsed > self.mod_tick {
@@ -63,6 +65,7 @@ pub struct ModRange {
 }
 
 impl ModRange {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         ModRange {
             min: 0.0,
@@ -85,7 +88,7 @@ pub struct ParamSet {
     pub modulated: swarc::ArcReader<SunfishParams>,
     pub modulated_writer: swarc::ArcWriter<SunfishParams>,
     // Metadata (ranges, linear, log, etc.)
-    pub meta: SunfishParamsVstMeta,
+    pub meta: SunfishParamsMeta,
 }
 
 impl ParamSet {
@@ -94,7 +97,7 @@ impl ParamSet {
         let modulated_params = baseline_params.clone();
         let (baseline_writer, baseline) = swarc::new(baseline_params);
         let (modulated_writer, modulated) = swarc::new(modulated_params);
-        let meta = SunfishParamsVstMeta::new();
+        let meta = SunfishParamsMeta::new();
 
         ParamSet {
             name,
@@ -139,9 +142,8 @@ impl Modulation {
 
     pub fn tick(&mut self, delta: f64) -> (Option<EParam>, Option<EParam>) {
         if let Some(time_elapsed) = self.mod_state.tick(delta) {
-            let updates = self.tick_lfos(time_elapsed);
             // Which parameters to update voices on, if any.
-            updates
+            self.tick_lfos(time_elapsed)
         } else {
             (None, None)
         }
@@ -160,8 +162,8 @@ impl Modulation {
         match param {
             // Modulators
             EParam::Lfo1(ELfoParams::Target) => {
-                let previous_target = self.params.modulated.lfo1.target.clone();
-                let target = self.params.baseline.lfo1.target.clone();
+                let previous_target = self.params.modulated.lfo1.target;
+                let target = self.params.baseline.lfo1.target;
                 update_mod_range(&mut self.mod_state, &self.params.meta, 0, target);
                 modulation_target_to_eparam(&previous_target)
             }
@@ -171,8 +173,8 @@ impl Modulation {
                 None
             }
             EParam::Lfo2(ELfoParams::Target) => {
-                let previous_target = self.params.modulated.lfo2.target.clone();
-                let target = self.params.baseline.lfo2.target.clone();
+                let previous_target = self.params.modulated.lfo2.target;
+                let target = self.params.baseline.lfo2.target;
                 update_mod_range(&mut self.mod_state, &self.params.meta, 1, target);
                 modulation_target_to_eparam(&previous_target)
             }
@@ -194,7 +196,7 @@ impl Modulation {
     /// If specified, the parameter affects all active voices (notes being played).
     pub fn tick_lfos(&mut self, time_delta: f64) -> (Option<EParam>, Option<EParam>) {
         let mod_value = self.lfo1.evaluate(time_delta) * self.params.baseline.lfo1.amt;
-        let target = self.params.baseline.lfo1.target.clone();
+        let target = self.params.baseline.lfo1.target;
         let update1 = apply_modulation_to(
             &self.mod_state,
             &mut self.params.modulated_writer,
@@ -205,7 +207,7 @@ impl Modulation {
         );
 
         let mod_value = self.lfo2.evaluate(time_delta) * self.params.baseline.lfo2.amt;
-        let target = self.params.baseline.lfo2.target.clone();
+        let target = self.params.baseline.lfo2.target;
         let update2 = apply_modulation_to(
             &self.mod_state,
             &mut self.params.modulated_writer,
@@ -301,7 +303,7 @@ pub fn modulate(
 
 pub fn update_mod_range(
     mod_state: &mut ModState,
-    meta: &SunfishParamsVstMeta,
+    meta: &SunfishParamsMeta,
     mod_index: usize,
     target: ModulationTarget,
 ) {

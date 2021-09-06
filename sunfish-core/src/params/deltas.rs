@@ -1,6 +1,6 @@
 use num::integer;
 
-use crate::params::{EParam, SunfishParamsVstMeta};
+use crate::params::{EParam, SunfishParamsMeta};
 
 struct Bitmask {
     value: Vec<u64>,
@@ -57,14 +57,14 @@ pub struct Deltas {
 }
 
 impl Deltas {
-    pub fn new(meta: &SunfishParamsVstMeta) -> Self {
+    pub fn new(meta: &SunfishParamsMeta) -> Self {
         let size = meta.param_to_index.len();
         let changed = Bitmask::new(size);
         Deltas { changed, size }
     }
 
     #[inline(always)]
-    pub fn set_changed(&mut self, meta: &SunfishParamsVstMeta, eparam: &EParam) {
+    pub fn set_changed(&mut self, meta: &SunfishParamsMeta, eparam: &EParam) {
         self.changed.set(meta.param_to_index(eparam).unwrap());
     }
 
@@ -97,7 +97,7 @@ pub struct DeltaChangeTracker {
 impl DeltaChangeTracker {
     // TODO: This is a bottleneck; there should be a faster way to do this,
     // maybe through an iterator?
-    pub fn refresh_changed(&mut self, meta: &SunfishParamsVstMeta, deltas: &Deltas) {
+    pub fn refresh_changed(&mut self, meta: &SunfishParamsMeta, deltas: &Deltas) {
         self.changed_list_cached.clear();
         for (index, eparam) in meta.paramlist.iter().enumerate() {
             if deltas.changed.get(&index) {
