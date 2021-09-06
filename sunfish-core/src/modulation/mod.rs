@@ -42,6 +42,8 @@ impl ModState {
         self.mod_tick = MOD_TICK_S * (1.0 / sample_rate);
     }
 
+    /// Tick the modulator; if enough time has passed to trigger an actual modulation tick, return
+    /// the time elapsed since the last tick.
     pub fn tick(&mut self, delta: f64) -> Option<f64> {
         self.mod_time_elapsed += delta;
         if self.mod_time_elapsed > self.mod_tick {

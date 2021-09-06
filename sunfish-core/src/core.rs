@@ -591,17 +591,15 @@ impl Sunfish {
         // Iterate over each sample in this channel, zipping with both
         // the amplitude and mod envelopes.
         let mut i = 0.0;
-        for (_index, (value, amp_and_filt_env)) in
-            buf.iter_mut().zip(amp_and_mod_env_levels).enumerate()
-        {
+        for (value, amp_and_filt_env) in buf.iter_mut().zip(amp_and_mod_env_levels) {
             let (amp_env, mod_env) = amp_and_filt_env;
 
             let filtered = if let Some(ref mut filter) = voice_filter {
                 // Avoid cast in tight loop: let delta_time = (index as f64) * dt;
                 let delta_time = i * dt;
                 // Step the voice mod.
-                let changed = voice_mod.tick(delta_time).is_some();
-                if changed {
+                let did_modulate = voice_mod.tick(delta_time).is_some();
+                if did_modulate {
                     // Apply the modulation. Filters only for now. Eventually,
                     // we can make these per-voice envelopes customizable.
 
