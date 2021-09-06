@@ -44,7 +44,7 @@ impl Plugin for plugin::SunfishPlugin {
 
             // We do need two outputs though.  This is default, but let's be
             // explicit anyways.
-            outputs: i32::from(core::CHANNEL_COUNT),
+            outputs: core::CHANNEL_COUNT as i32,
 
             parameters: self.core.modulation.params.meta.count() as i32,
 
@@ -179,8 +179,8 @@ impl Plugin for plugin::SunfishPlugin {
         }
 
         // Create a fixed slice of mutable slices (to avoid any heap allocations).
-        let mut v: [&mut [f64]; 2] = Default::default();
-        let ch_count = output_buffer.len().max(2);
+        let mut v: [&mut [f64]; core::CHANNEL_COUNT] = Default::default();
+        let ch_count = output_buffer.len().max(core::CHANNEL_COUNT);
 
         for ch in 0..ch_count {
             v[ch] = output_buffer.get_mut(ch);

@@ -15,7 +15,7 @@ use crate::params::SunfishParamsMeta;
 use crate::params::{EFiltParams, EOscParams, EParam};
 use crate::util::note_freq::NOTE_TO_FREQ;
 
-pub const CHANNEL_COUNT: u8 = 2;
+pub const CHANNEL_COUNT: usize = 2;
 pub const VOICES_MAX: usize = 128;
 
 #[derive(Debug)]
@@ -65,8 +65,8 @@ impl Voice {
         params: &SunfishParams,
         meta: &SunfishParamsMeta,
     ) -> Voice {
-        let mut filter1: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT as usize);
-        let mut filter2: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT as usize);
+        let mut filter1: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT);
+        let mut filter2: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT);
         for _channel_idx in 0..CHANNEL_COUNT {
             filter1.push(Filter::new(
                 sample_rate,
@@ -87,8 +87,8 @@ impl Voice {
         mod_envelope.start();
 
         // TODO: If note isn't valid, set velocity to 0.
-        let cached_waveforms_osc1 = vec![CachedWaveform::zero(); CHANNEL_COUNT as usize];
-        let cached_waveforms_osc2 = vec![CachedWaveform::zero(); CHANNEL_COUNT as usize];
+        let cached_waveforms_osc1 = vec![CachedWaveform::zero(); CHANNEL_COUNT];
+        let cached_waveforms_osc2 = vec![CachedWaveform::zero(); CHANNEL_COUNT];
 
         let mut mod_state = ModState::new(sample_rate, 1);
         modulation::update_mod_range(&mut mod_state, meta, 0, ModulationTarget::Filter1Cutoff);
