@@ -22,9 +22,10 @@ use crate::util::errors;
 // We're implementing a trait `Plugin` that does all the VST-y stuff for us.
 impl Plugin for plugin::SunfishPlugin {
     fn new(host: HostCallback) -> plugin::SunfishPlugin {
-        let mut inst = plugin::SunfishPlugin::default();
-        inst.host = host;
-        inst
+        plugin::SunfishPlugin {
+            host,
+            ..Default::default()
+        }
     }
 
     fn init(&mut self) {
@@ -188,6 +189,7 @@ impl Plugin for plugin::SunfishPlugin {
         let mut v: [&mut [f64]; core::CHANNEL_COUNT] = Default::default();
         let ch_count = output_buffer.len().max(core::CHANNEL_COUNT);
 
+        #[allow(clippy::needless_range_loop)]
         for ch in 0..ch_count {
             v[ch] = output_buffer.get_mut(ch);
         }

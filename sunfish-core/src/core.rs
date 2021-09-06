@@ -50,6 +50,7 @@ pub struct Voice {
 }
 
 impl Voice {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         sample_rate: f64,
         note: u8,
@@ -161,8 +162,7 @@ impl Voice {
 
         let freq = *NOTE_TO_FREQ.get(&note).unwrap_or(&0.0);
         // TODO: Pitch bending.
-        let freq = freq + fine_offset;
-        freq
+        freq + fine_offset
     }
 }
 
@@ -185,6 +185,7 @@ impl Tempo {
 
     #[inline(always)]
     pub fn update(&mut self, tempo_bpm_f64: f64) {
+        #[allow(clippy::float_cmp)]
         if self.tempo_bpm_f64 != tempo_bpm_f64 {
             self.tempo_bpm_f64 = tempo_bpm_f64;
             self.tempo_bpm_f32 = tempo_bpm_f64 as f32;
@@ -558,6 +559,7 @@ impl Sunfish {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn render_chain(
         buf: &mut [f64],
@@ -606,8 +608,7 @@ impl Sunfish {
                     // Since we've ticked, we need to compute the effective
                     // cutoff.
                     let mod_env = mod_env * filt_env_amount;
-                    let modulated_cutoff =
-                        modulation::modulate(&voice_mod, 0, cutoff_semi, mod_env);
+                    let modulated_cutoff = modulation::modulate(voice_mod, 0, cutoff_semi, mod_env);
                     filter.set_cutoff(modulated_cutoff);
                     // log::info!("Mod env set cutoff to {} semis", modulated_cutoff);
                 }

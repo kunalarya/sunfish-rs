@@ -43,17 +43,9 @@ impl<T> Deref for ArcReader<T> {
     }
 }
 
-/*
-impl<T> Clone for ArcReader<T> {
-    fn clone(&self) -> Self {
-        ArcReader {
-            wrapped: Arc::clone(&self.wrapped),
-        }
-    }
-}
-*/
-
 impl<T> ArcReader<T> {
+    // TODO: File a bug about this; it's a standalone method.
+    #[allow(clippy::should_implement_trait)]
     pub fn clone(reader: &ArcReader<T>) -> Self {
         ArcReader {
             wrapped: Arc::clone(&reader.wrapped),

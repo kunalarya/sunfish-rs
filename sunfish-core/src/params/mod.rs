@@ -446,21 +446,21 @@ pub enum ELfoParams {
 
 // Names.
 impl EParam {
-    pub fn to_string(&self, short: bool) -> String {
+    pub fn as_string(&self, short: bool) -> String {
         //"todo".to_string()
         let param_name = match self {
-            Self::Osc1(e) => e.to_string(short),
-            Self::Osc2(e) => e.to_string(short),
-            Self::Filt1(e) => e.to_string(short),
-            Self::Filt2(e) => e.to_string(short),
-            Self::AmpEnv(e) => e.to_string(short),
-            Self::ModEnv(e) => e.to_string(short),
-            Self::Lfo1(e) => e.to_string(short),
-            Self::Lfo2(e) => e.to_string(short),
+            Self::Osc1(e) => e.as_string(short),
+            Self::Osc2(e) => e.as_string(short),
+            Self::Filt1(e) => e.as_string(short),
+            Self::Filt2(e) => e.as_string(short),
+            Self::AmpEnv(e) => e.as_string(short),
+            Self::ModEnv(e) => e.as_string(short),
+            Self::Lfo1(e) => e.as_string(short),
+            Self::Lfo2(e) => e.as_string(short),
             Self::OutputGain => "Output Gain".to_string(),
         };
         if short {
-            param_name.to_string()
+            param_name
         } else {
             let prefix = match self {
                 Self::Osc1(_) => "Osc1",
@@ -504,7 +504,7 @@ impl EParam {
     }
 }
 impl EOscParams {
-    fn to_string(&self, _short: bool) -> String {
+    fn as_string(&self, _short: bool) -> String {
         let s = match self {
             Self::Enabled => "Enabled",
             Self::Shape => "Shape",
@@ -533,7 +533,7 @@ impl EOscParams {
     }
 }
 impl EFiltParams {
-    fn to_string(&self, _short: bool) -> String {
+    fn as_string(&self, _short: bool) -> String {
         let s = match self {
             Self::Enable => "Enable",
             Self::Cutoff => "Cutoff",
@@ -555,7 +555,7 @@ impl EFiltParams {
 }
 
 impl EAdsrParams {
-    fn to_string(&self, _short: bool) -> String {
+    fn as_string(&self, _short: bool) -> String {
         let s = match self {
             Self::Attack => "Attack",
             Self::Decay => "Decay",
@@ -575,7 +575,7 @@ impl EAdsrParams {
 }
 
 impl ELfoParams {
-    fn to_string(&self, _short: bool) -> String {
+    fn as_string(&self, _short: bool) -> String {
         let s = match self {
             Self::Target => "Target",
             Self::Shape => "Shape",
@@ -654,6 +654,7 @@ pub struct SunfishParamsMeta {
 }
 
 impl SunfishParamsMeta {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         /*
          * The VST interface retrieves parameters by index. Additionally, we would like to store
@@ -716,7 +717,7 @@ impl SunfishParamsMeta {
             // Modulation
             mod_target_meta: (Enum::new(ModulationTarget::enumerate()), StringFormatter()),
             mod_shape_meta: (Enum::new(LfoShape::enumerate()), StringFormatter()),
-            mod_sync_meta: ((Boolean::new(), BoolOnOffFormatter())),
+            mod_sync_meta: (Boolean::new(), BoolOnOffFormatter()),
             mod_rate_hz_meta: (
                 Linear::new(MIN_MOD_RATE_FREQ, MAX_MOD_RATE_FREQ),
                 NumberFormatter(),
@@ -738,7 +739,7 @@ impl SunfishParamsMeta {
     }
 
     pub fn param_to_index(&self, param: &EParam) -> Option<usize> {
-        self.param_to_index.get(param).map(|item| *item)
+        self.param_to_index.get(param).copied()
     }
 }
 
@@ -763,6 +764,7 @@ impl SunfishParams {
     }
 }
 
+#[allow(clippy::result_unit_err)]
 pub trait NormalizedParams {
     fn update_param_by_index(
         &mut self,
@@ -843,28 +845,28 @@ impl NormalizedParams for SunfishParams {
         // TODO: Update params
         match eparam {
             EParam::Osc1(osc_param) => {
-                self.osc1.update_param(&meta, osc_param, new_value)?;
+                self.osc1.update_param(meta, osc_param, new_value)?;
             }
             EParam::Osc2(osc_param) => {
-                self.osc2.update_param(&meta, osc_param, new_value)?;
+                self.osc2.update_param(meta, osc_param, new_value)?;
             }
             EParam::Filt1(filt_param) => {
-                self.filt1.update_param(&meta, filt_param, new_value)?;
+                self.filt1.update_param(meta, filt_param, new_value)?;
             }
             EParam::Filt2(filt_param) => {
-                self.filt2.update_param(&meta, filt_param, new_value)?;
+                self.filt2.update_param(meta, filt_param, new_value)?;
             }
             EParam::AmpEnv(env_param) => {
-                self.amp_env.update_param(&meta, env_param, new_value)?;
+                self.amp_env.update_param(meta, env_param, new_value)?;
             }
             EParam::ModEnv(env_param) => {
-                self.mod_env.update_param(&meta, env_param, new_value)?;
+                self.mod_env.update_param(meta, env_param, new_value)?;
             }
             EParam::Lfo1(lfo_param) => {
-                self.lfo1.update_param(&meta, lfo_param, new_value)?;
+                self.lfo1.update_param(meta, lfo_param, new_value)?;
             }
             EParam::Lfo2(lfo_param) => {
-                self.lfo2.update_param(&meta, lfo_param, new_value)?;
+                self.lfo2.update_param(meta, lfo_param, new_value)?;
             }
             EParam::OutputGain => {
                 self.output_gain = meta.output_gain_meta.0.vst_float_to_value(new_value);
@@ -876,28 +878,28 @@ impl NormalizedParams for SunfishParams {
     fn get_param_normalized(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<f64, ()> {
         // Return 1-normalized value.
         Ok(match eparam {
-            EParam::Osc1(osc_param) => self.osc1.get_param_normalized(&meta, osc_param)?,
-            EParam::Osc2(osc_param) => self.osc2.get_param_normalized(&meta, osc_param)?,
-            EParam::Filt1(filt_param) => self.filt1.get_param_normalized(&meta, filt_param)?,
-            EParam::Filt2(filt_param) => self.filt2.get_param_normalized(&meta, filt_param)?,
-            EParam::AmpEnv(env_param) => self.amp_env.get_param_normalized(&meta, env_param)?,
-            EParam::ModEnv(env_param) => self.mod_env.get_param_normalized(&meta, env_param)?,
-            EParam::Lfo1(lfo_param) => self.lfo1.get_param_normalized(&meta, lfo_param)?,
-            EParam::Lfo2(lfo_param) => self.lfo2.get_param_normalized(&meta, lfo_param)?,
+            EParam::Osc1(osc_param) => self.osc1.get_param_normalized(meta, osc_param)?,
+            EParam::Osc2(osc_param) => self.osc2.get_param_normalized(meta, osc_param)?,
+            EParam::Filt1(filt_param) => self.filt1.get_param_normalized(meta, filt_param)?,
+            EParam::Filt2(filt_param) => self.filt2.get_param_normalized(meta, filt_param)?,
+            EParam::AmpEnv(env_param) => self.amp_env.get_param_normalized(meta, env_param)?,
+            EParam::ModEnv(env_param) => self.mod_env.get_param_normalized(meta, env_param)?,
+            EParam::Lfo1(lfo_param) => self.lfo1.get_param_normalized(meta, lfo_param)?,
+            EParam::Lfo2(lfo_param) => self.lfo2.get_param_normalized(meta, lfo_param)?,
             EParam::OutputGain => meta.output_gain_meta.0.value_to_vst_float(self.output_gain),
         })
     }
 
     fn formatted_value(&self, meta: &SunfishParamsMeta, eparam: EParam) -> Result<String, ()> {
         let result = match eparam {
-            EParam::Osc1(osc_param) => self.osc1.format_value(&meta, osc_param)?,
-            EParam::Osc2(osc_param) => self.osc2.format_value(&meta, osc_param)?,
-            EParam::Filt1(filt_param) => self.filt1.format_value(&meta, filt_param)?,
-            EParam::Filt2(filt_param) => self.filt2.format_value(&meta, filt_param)?,
-            EParam::AmpEnv(env_param) => self.amp_env.format_value(&meta, env_param)?,
-            EParam::ModEnv(env_param) => self.mod_env.format_value(&meta, env_param)?,
-            EParam::Lfo1(lfo_param) => self.lfo1.format_value(&meta, lfo_param)?,
-            EParam::Lfo2(lfo_param) => self.lfo2.format_value(&meta, lfo_param)?,
+            EParam::Osc1(osc_param) => self.osc1.format_value(meta, osc_param)?,
+            EParam::Osc2(osc_param) => self.osc2.format_value(meta, osc_param)?,
+            EParam::Filt1(filt_param) => self.filt1.format_value(meta, filt_param)?,
+            EParam::Filt2(filt_param) => self.filt2.format_value(meta, filt_param)?,
+            EParam::AmpEnv(env_param) => self.amp_env.format_value(meta, env_param)?,
+            EParam::ModEnv(env_param) => self.mod_env.format_value(meta, env_param)?,
+            EParam::Lfo1(lfo_param) => self.lfo1.format_value(meta, lfo_param)?,
+            EParam::Lfo2(lfo_param) => self.lfo2.format_value(meta, lfo_param)?,
             EParam::OutputGain => meta.output_gain_meta.1.format_value(self.output_gain),
         };
         Ok(result)
