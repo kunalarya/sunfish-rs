@@ -37,7 +37,7 @@ impl Plugin for plugin::SunfishPlugin {
             name: "Sunfish".to_string(),
 
             // Used by hosts to differentiate between plugins.
-            unique_id: 13137,
+            unique_id: 0x78_B5_2B_BC,
 
             // We don't need inputs
             inputs: 0,
