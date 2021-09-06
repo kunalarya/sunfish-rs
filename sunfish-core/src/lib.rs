@@ -36,6 +36,9 @@ impl Plugin for plugin::SunfishPlugin {
         Info {
             name: "Sunfish".to_string(),
 
+            // Version v0.1
+            version: 100,
+
             // Used by hosts to differentiate between plugins.
             unique_id: 0x78_B5_2B_BC,
 
@@ -50,6 +53,9 @@ impl Plugin for plugin::SunfishPlugin {
 
             // Set our category
             category: Category::Synth,
+
+            // 64-bit processing.
+            f64_precision: true,
 
             // We don't care about other stuff, and it can stay default.
             ..Default::default()
