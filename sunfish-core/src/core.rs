@@ -2,6 +2,8 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use num_traits::Float;
+
 use crate::dsp::env;
 use crate::dsp::filter::Filter;
 use crate::dsp::interpolator::{CachedWaveform, Interpolator};
@@ -434,7 +436,7 @@ impl Sunfish {
         }
     }
 
-    pub fn render(&mut self, outputs: &mut [&mut [f64]]) {
+    pub fn render<F: Float>(&mut self, outputs: &mut [&mut [F]]) {
         let buf_len = outputs[0].len();
         let buf_len_float = buf_len as f64;
         self.buf.resize(buf_len, 0.0);
@@ -554,14 +556,15 @@ impl Sunfish {
         for (_channel_idx, output_channel) in outputs.iter_mut().enumerate() {
             for output_sample in output_channel.iter_mut() {
                 // Apply global gain.
-                *output_sample *= self.modulation.params.modulated.output_gain;
+                *output_sample = *output_sample
+                    * num::cast(self.modulation.params.modulated.output_gain).unwrap();
             }
         }
     }
 
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn render_chain(
+    fn render_chain<F: Float>(
         buf: &mut [f64],
         dt: f64, // Delta time per element of buf
         interpolator: &mut Interpolator,
@@ -572,7 +575,7 @@ impl Sunfish {
         voice_mod: &mut ModState,
         cutoff_semi: f64,
         filt_env_amount: f64,
-        output_channel: &mut [f64],
+        output_channel: &mut [F],
         stereo_width: f64,
         shape: &WaveShape,
         unison: &Unison,
@@ -621,7 +624,7 @@ impl Sunfish {
             i += 1.0;
         }
         for (output_sample, value) in output_channel.iter_mut().zip(buf) {
-            *output_sample += *value;
+            *output_sample = *output_sample + num::cast(*value).unwrap();
         }
     }
 }
