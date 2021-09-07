@@ -8,6 +8,7 @@ pub mod plugin;
 pub mod swarc;
 pub mod util;
 
+use num_traits::Float;
 use vst::api::{Events, Supported};
 use vst::buffer::AudioBuffer;
 use vst::editor::Editor;
@@ -155,11 +156,31 @@ impl Plugin for plugin::SunfishPlugin {
         None
     }
 
-    fn process(&mut self, _buffer: &mut AudioBuffer<f32>) {
-        // TODO: Support 32-bit?
+    fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
+        self._process(buffer);
     }
 
     fn process_f64(&mut self, buffer: &mut AudioBuffer<f64>) {
+        self._process(buffer);
+    }
+
+    // It's good to tell our host what our plugin can do.
+    // Some VST hosts might not send any midi events to our plugin
+    // if we don't explicitly tell them that the plugin can handle them.
+    fn can_do(&self, can_do: CanDo) -> Supported {
+        match can_do {
+            // Tell our host that the plugin supports receiving MIDI messages
+            CanDo::ReceiveMidiEvent => Supported::Yes,
+            // Can receive time information (host tempo, etc).
+            CanDo::ReceiveTimeInfo => Supported::Yes,
+            // Maybe it also supports ather things
+            _ => Supported::Maybe,
+        }
+    }
+}
+
+impl plugin::SunfishPlugin {
+    fn _process<F: Float>(&mut self, buffer: &mut AudioBuffer<F>) {
         // `buffer.split()` gives us a tuple containing the
         // input and output buffers.
         let (_, mut output_buffer) = buffer.split();
@@ -181,12 +202,12 @@ impl Plugin for plugin::SunfishPlugin {
         // are zero. There may be a faster way to do this in the future.
         for output_channel in output_buffer.into_iter() {
             for output_sample in output_channel {
-                *output_sample = 0.0;
+                *output_sample = F::from(0.0).unwrap();
             }
         }
 
         // Create a fixed slice of mutable slices (to avoid any heap allocations).
-        let mut v: [&mut [f64]; core::CHANNEL_COUNT] = Default::default();
+        let mut v: [&mut [F]; core::CHANNEL_COUNT] = Default::default();
         let ch_count = output_buffer.len().max(core::CHANNEL_COUNT);
 
         #[allow(clippy::needless_range_loop)]
@@ -195,20 +216,6 @@ impl Plugin for plugin::SunfishPlugin {
         }
 
         self.core.render(&mut v[..ch_count]);
-    }
-
-    // It's good to tell our host what our plugin can do.
-    // Some VST hosts might not send any midi events to our plugin
-    // if we don't explicitly tell them that the plugin can handle them.
-    fn can_do(&self, can_do: CanDo) -> Supported {
-        match can_do {
-            // Tell our host that the plugin supports receiving MIDI messages
-            CanDo::ReceiveMidiEvent => Supported::Yes,
-            // Can receive time information (host tempo, etc).
-            CanDo::ReceiveTimeInfo => Supported::Yes,
-            // Maybe it also supports ather things
-            _ => Supported::Maybe,
-        }
     }
 }
 
