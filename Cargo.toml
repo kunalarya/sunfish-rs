@@ -2,4 +2,5 @@
 members = [
     "sunfish-core",
     "sunfish-py",
+    "sunfish-standalone",
 ]

@@ -4,15 +4,43 @@ version = "0.1.0"
 authors = ["Kunal Arya <me@example.com>"]
 edition = "2018"
 
+[lib]
+name = "sunfish"
+crate-type = ["cdylib", "rlib"]
+
 # Enable debug symbols in release build.
 [profile.release]
 debug = true
 
 [dependencies]
+anyhow = "1.0"
+async-std = "1.6.5"
+bytemuck = { version = "1.4", features = ["derive"] }
+futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
+image = "0.23"
 lazy_static = "1.4.0"
 log = "0.4.*"
+# Commit SHA: 6bf3599c
+# lyon = { path = "../../lyon" }
+lyon = { git = "https://github.com/nical/lyon.git", rev = "6bf3599c" }
 num = "0.2.0"
 num-traits = "0.2"
+ron = "^0.6.4"
 serde = { version = "1.0.60", features = ["serde_derive"] }
 serde_json = { version = "1.0.59" }
+simplelog = "0.5.*"
+twox-hash = { version = "1.0" }
 vst = { git = "https://github.com/kunalarya/vst-unsafe-rs.git", branch = "main" }
+# wgpu = { git = "https://github.com/gfx-rs/wgpu.git", branch = "v0.6" }
+wgpu = "0.6"
+wgpu_glyph = "0.10.0"
+winit = { git = "https://github.com/kunalarya/winit.git", branch = "winit_0_25_child_win_macos" }
+
+[build-dependencies]
+anyhow = "1.0"
+fs_extra = "1.2"
+glob = "0.3"
+shaderc = "0.6"
+
+[dev-dependencies]
+approx = "0.3.2"

@@ -6,14 +6,14 @@ use numpy::{IntoPyArray, PyArrayDyn};
 use pyo3::exceptions;
 use pyo3::prelude::*;
 
-use sunfish_core::core;
-use sunfish_core::dsp::osc;
-use sunfish_core::lfo;
-use sunfish_core::modulation::target::ModulationTarget;
-use sunfish_core::params::NormalizedParams;
-use sunfish_core::params::MAX_CUTOFF_SEMI;
-use sunfish_core::params::{ELfoParams, EOscParams, EParam};
-use sunfish_core::plugin;
+use sunfish::core;
+use sunfish::dsp::osc;
+use sunfish::lfo;
+use sunfish::modulation::target::ModulationTarget;
+use sunfish::params::NormalizedParams;
+use sunfish::params::MAX_CUTOFF_SEMI;
+use sunfish::params::{ELfoParams, EOscParams, EParam};
+use sunfish::plugin;
 
 const DEFAULT_TEMPO_BPS: f64 = 120.0;
 

@@ -272,7 +272,7 @@ def initialize_synth(synth, shape: str) -> None:
     synth.update_param(interface.eparam_path("Filt1", "Enable"), 0.0)
     synth.update_param(interface.eparam_path("Filt2", "Enable"), 0.0)
 
-    synth.update_param(interface.eparam_path("AmpEnv", "Attack"), 0.1)
+    synth.update_param(interface.eparam_path("AmpEnv", "Attack"), 0.0)
     synth.update_param(interface.eparam_path("AmpEnv", "Sustain"), 1.0)
     synth.update_param(interface.eparam_path("AmpEnv", "Decay"), 1.0)
     synth.update_param(interface.eparam_path("AmpEnv", "Release"), 1.0)

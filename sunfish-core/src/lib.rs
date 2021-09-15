@@ -6,6 +6,7 @@ pub mod modulation;
 pub mod params;
 pub mod plugin;
 pub mod swarc;
+pub mod ui;
 pub mod util;
 
 use num_traits::Float;
@@ -30,8 +31,22 @@ impl Plugin for plugin::SunfishPlugin {
     }
 
     fn init(&mut self) {
-        log::info!("Started Sunfish VST",);
         errors::setup_panic_handling();
+
+        {
+            use std::fs::File;
+            use std::path::Path;
+
+            use simplelog::{Config, LevelFilter, WriteLogger};
+
+            let log_file = Path::new("/tmp/").join("sunfish.log");
+            let f = File::create(&log_file);
+            if let Ok(file) = f {
+                // Ignore result.
+                let _ = WriteLogger::init(LevelFilter::Info, Config::default(), file);
+            }
+        }
+        log::info!("Started Sunfish VST",);
     }
 
     fn get_info(&self) -> Info {
@@ -106,6 +121,26 @@ impl Plugin for plugin::SunfishPlugin {
         if let Ok(eparam) = notification {
             self.core
                 .notify_param_update(eparam, value, self.tempo.tempo_bps);
+            let meta = &self.core.modulation.params.meta;
+
+            // Try to update the GUI
+            // TODO: Consolidate all of this logic with the GUI -- it's identical
+            if let Ok(ref mut for_gui_deltas) = self.for_gui_deltas.try_lock() {
+                if self.for_gui_deltas_pending.any_changed() {
+                    self.for_gui_deltas_pending_tracker.refresh_changed(
+                        &self.core.modulation.params.meta,
+                        &self.for_gui_deltas_pending,
+                    );
+                    for updated_eparam in &self.for_gui_deltas_pending_tracker.changed_list_cached {
+                        for_gui_deltas.set_changed(&meta, &updated_eparam);
+                    }
+                    self.for_gui_deltas_pending.reset();
+                }
+                for_gui_deltas.set_changed(&meta, &eparam);
+            } else {
+                // store into pending
+                self.for_gui_deltas_pending.set_changed(&meta, &eparam);
+            }
         }
     }
 
@@ -153,7 +188,11 @@ impl Plugin for plugin::SunfishPlugin {
 
     /// Return handle to plugin editor if supported.
     fn get_editor(&mut self) -> Option<&mut dyn Editor> {
-        None
+        if ui::editor_supported() {
+            Some(&mut self.editor)
+        } else {
+            None
+        }
     }
 
     fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
@@ -214,6 +253,9 @@ impl plugin::SunfishPlugin {
         for ch in 0..ch_count {
             v[ch] = output_buffer.get_mut(ch);
         }
+
+        // Resolve parameter updates from the GUI.
+        self.handle_gui_and_host_parameter_updates();
 
         self.core.render(&mut v[..ch_count]);
     }
