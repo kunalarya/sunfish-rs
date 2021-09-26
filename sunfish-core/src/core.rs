@@ -332,6 +332,7 @@ impl Sunfish {
     fn update_voices(&mut self, param: EParam) {
         match param {
             // Oscillators
+            // TODO: May need shape here.
             EParam::Osc1(EOscParams::SemitonesOffset)
             | EParam::Osc1(EOscParams::OctaveOffset)
             | EParam::Osc1(EOscParams::FineOffset) => {

@@ -310,6 +310,18 @@ impl Interpolator {
                 output_count,           // output_count
             );
             (phase, 0.0)
+        } else if unison == Unison::U2 {
+            let (phase, phase2) = interpolation::interpolate_linear_inplace2(
+                ref_waveform,           // input
+                cache.ref_waveform_len, // input_len_f
+                cache.last_phase,       // input_phase
+                cache.last_phase2,      // input_phase2
+                cache.f_samples,        // target_samples
+                cache.f_samples2,       // target_samples2
+                &mut output_buf,        // output_buf
+                output_count,           // output_count
+            );
+            (phase, phase2)
         } else {
             (0.0, 0.0)
         };

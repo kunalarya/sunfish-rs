@@ -111,6 +111,55 @@ pub fn interpolate_linear_inplace(
     phase
 }
 
+/// Unison, 2-voice linear interpolation.
+/// TODO: Merge with above.
+pub fn interpolate_linear_inplace2(
+    reference: &[f64],
+    ref_len_f: f64,
+    input_phase: f64,
+    input_phase2: f64,
+    desired_samples: f64,
+    desired_samples2: f64,
+    output_buf: &mut [f64],
+    output_count: usize,
+) -> (f64, f64) {
+    let ref_len = reference.len() as isize;
+    let mut phase = input_phase % 1.0;
+    let mut phase2 = input_phase2 % 1.0;
+
+    let phase_dt = 1.0 / desired_samples;
+    let phase_dt2 = 1.0 / desired_samples2;
+    let ref_len_n_minus_1 = ref_len_f - 1.0;
+    #[allow(clippy::needless_range_loop)]
+    for output_index in 0..output_count {
+        // We use ref_len_f - 1 because we treat the last
+        // datapoint in the reference signal as an endpoint.
+        // We will interpolate between datapoints at (n-2) to (n-1)
+        let ref_index = ref_len_n_minus_1 * phase;
+        let ref_index2 = ref_len_n_minus_1 * phase2;
+        let ref_index_floor = ref_index.floor();
+        let ref_index_floor2 = ref_index2.floor();
+
+        let eta = ref_index - ref_index_floor;
+        let eta2 = ref_index2 - ref_index_floor2;
+
+        let ref_index_floor_i = ref_index_floor as isize;
+        let ref_index_floor_i2 = ref_index_floor2 as isize;
+
+        let a = reference[index_wrapped(ref_len, ref_index_floor_i)];
+        let b = reference[index_wrapped(ref_len, ref_index_floor_i + 1)];
+        let voice1 = ((1.0 - eta) * a) + (eta * b);
+        let a2 = reference[index_wrapped(ref_len, ref_index_floor_i2)];
+        let b2 = reference[index_wrapped(ref_len, ref_index_floor_i2 + 1)];
+        let voice2 = ((1.0 - eta2) * a2) + (eta2 * b2);
+        output_buf[output_index] = voice1 + voice2;
+
+        phase = (phase + phase_dt) % 1.0;
+        phase2 = (phase2 + phase_dt2) % 1.0;
+    }
+    (phase, phase2)
+}
+
 #[inline(always)]
 fn index_clamped(length: usize, index: usize) -> usize {
     if index > length - 1 {
