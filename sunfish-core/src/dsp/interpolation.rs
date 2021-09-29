@@ -13,16 +13,10 @@ pub fn hermite_cubic_baseline(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
     a_ * t3 + b_ * t2 + c_ * t + d_
 }
 
-/// Wrap the index. Note that this needs to be compared against modulo integer performance.
+/// Wrap the index.
 #[inline(always)]
 fn index_wrapped(length: isize, index: isize) -> usize {
-    if index > length - 1 {
-        (index - (length - 1)) as usize
-    } else if index < 0 {
-        ((length - 1) + index) as usize
-    } else {
-        index as usize
-    }
+    index as usize % length as usize
 }
 
 /// Interpolate the input signal according to the given
@@ -80,23 +74,11 @@ pub fn interpolate_linear_inplace(
     let mut phase = input_phase % 1.0;
 
     let phase_dt = 1.0 / desired_samples;
-    // Subtract one because:
-    // Say ref len is 4:    x --- x --- x --- x
-    // & desired len is 3:  x ------ x ------ x
-    //
-    // We want to treat the last point in our reference signal as an
-    // endpoint, so that it's included in the interpolation.
-    //
-    // Put another way, this is the first-order implementation of
-    // Lagrange interpolation, which interpolates points given N + 1
-    // samples.
-    let ref_len_n_minus_1 = ref_len_f - 1.0;
+    // This is the first-order implementation of Lagrange interpolation.
     #[allow(clippy::needless_range_loop)]
     for output_index in 0..output_count {
-        // We use ref_len_f - 1 because we treat the last
-        // datapoint in the reference signal as an endpoint.
         // We will interpolate between datapoints at (n-2) to (n-1)
-        let ref_index = ref_len_n_minus_1 * phase;
+        let ref_index = ref_len_f * phase;
         let ref_index_floor = ref_index.floor();
 
         let eta = ref_index - ref_index_floor;
@@ -129,14 +111,11 @@ pub fn interpolate_linear_inplace2(
 
     let phase_dt = 1.0 / desired_samples;
     let phase_dt2 = 1.0 / desired_samples2;
-    let ref_len_n_minus_1 = ref_len_f - 1.0;
     #[allow(clippy::needless_range_loop)]
     for output_index in 0..output_count {
-        // We use ref_len_f - 1 because we treat the last
-        // datapoint in the reference signal as an endpoint.
         // We will interpolate between datapoints at (n-2) to (n-1)
-        let ref_index = ref_len_n_minus_1 * phase;
-        let ref_index2 = ref_len_n_minus_1 * phase2;
+        let ref_index = ref_len_f * phase;
+        let ref_index2 = ref_len_f * phase2;
         let ref_index_floor = ref_index.floor();
         let ref_index_floor2 = ref_index2.floor();
 

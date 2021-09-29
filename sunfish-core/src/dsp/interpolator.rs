@@ -18,7 +18,7 @@ const HARD_SAW_HARMONICS: usize = 64;
 // Cache the generated/interpolated waveform.
 #[derive(Clone, Debug)]
 pub struct CachedWaveform {
-    ref_freq: f64,
+    last_freq: f64,
     last_phase: f64,
     last_phase2: f64,
     last_phase3: f64,
@@ -28,12 +28,13 @@ pub struct CachedWaveform {
     f_samples2: f64,
     ref_waveform_len: f64,
     last_unison: Unison,
+    last_unison_amt: f64,
 }
 
 impl CachedWaveform {
     pub fn zero() -> Self {
         CachedWaveform {
-            ref_freq: 0.0,
+            last_freq: 0.0,
             last_phase: 0.0,
             last_phase2: 0.0,
             last_phase3: 0.0,
@@ -43,16 +44,18 @@ impl CachedWaveform {
             f_samples2: 0.0,
             ref_waveform_len: 0.0,
             last_unison: Unison::Off,
+            last_unison_amt: 0.0,
         }
     }
 
     pub fn reset(&mut self) {
-        self.ref_freq = 0.0;
+        self.last_freq = 0.0;
         self.key = (0, HashableF64::from_float(0.0));
         self.f_samples = 0.0;
         self.f_samples2 = 0.0;
         self.ref_waveform_len = 0.0;
         self.last_unison = Unison::Off;
+        self.last_unison_amt = 0.0;
     }
 }
 
@@ -114,10 +117,14 @@ impl Interpolator {
 
         // for each shape, render all fundamental frequencies for the mipmap.
         // Max frequency to render:
-        let max_note = 70;
+        let max_note = note_freq::MIDI_NOTE_MAX;
         let all_freqs: Vec<f64> = (note_freq::MIDI_NOTE_MIN..max_note)
             .step_by(midi_step)
-            .map(|note| *note_freq::NOTE_TO_FREQ.get(&note).unwrap())
+            .map(|note| {
+                *note_freq::NOTE_TO_FREQ
+                    .get(&note)
+                    .expect("NOTE_TO_FREQ missing note")
+            })
             .map(round_to_sample_rate)
             .collect();
 
@@ -223,7 +230,6 @@ impl Interpolator {
         // pure tones, sawtooths, triangles, etc.
         //
         // The fundamental frequency must be the first element.
-        let mut time = 0.0;
         let nyquist = sample_rate / 2.0;
 
         let fundamental_freq = fparams[0].f;
@@ -238,6 +244,7 @@ impl Interpolator {
 
         let mut rendered: Vec<f64> = Vec::with_capacity(samples);
         for i in 0..samples {
+            let time = (i as f64) * dt;
             let value = {
                 let mut v = 0.0;
                 for fparam in fparams.iter() {
@@ -250,8 +257,6 @@ impl Interpolator {
             };
 
             rendered.push(value);
-
-            time = (i as f64) * dt;
         }
         normalize(rendered)
     }
@@ -269,35 +274,40 @@ impl Interpolator {
         unison_amt: f64,
     ) {
         if freq == 0.0 {
-            panic!("Zero frequency");
+            log::error!("Zero frequency");
+            return;
         }
-        let ref_freq = cache.ref_freq;
+        let last_freq = cache.last_freq;
         let last_unison = cache.last_unison;
+        let last_unison_amt = cache.last_unison_amt;
+
         #[allow(clippy::float_cmp)]
-        let ref_waveform = if ref_freq != freq || unison != last_unison {
-            // Grab the next mipmap frequency.
-            let bias_up = true;
-            let ref_freq = closest_number_in(freq, &self.frequencies, bias_up);
-            let key = (shape.value(), HashableF64::from_float(ref_freq));
-            cache.key = key;
-            cache.f_samples = self.sample_rate / freq;
-            cache.f_samples2 = if unison != Unison::Off {
-                self.sample_rate / (freq + unison_amt)
+        let ref_waveform =
+            if last_freq != freq || unison != last_unison || unison_amt != last_unison_amt {
+                // Grab the next mipmap frequency.
+                let bias_up = true;
+                let ref_freq = closest_number_in(freq, &self.frequencies, bias_up);
+                let key = (shape.value(), HashableF64::from_float(ref_freq));
+                cache.key = key;
+                cache.last_freq = freq;
+                cache.f_samples = self.sample_rate / freq;
+                cache.f_samples2 = if unison != Unison::Off {
+                    self.sample_rate / (freq + unison_amt)
+                } else {
+                    0.0
+                };
+                let ref_waveform = self
+                    .references
+                    .get(&cache.key)
+                    .unwrap_or_else(|| panic!("Internal error"));
+                cache.ref_waveform_len = ref_waveform.len() as f64;
+                cache.last_unison = unison;
+                ref_waveform
             } else {
-                0.0
+                self.references
+                    .get(&cache.key)
+                    .unwrap_or_else(|| panic!("Internal error"))
             };
-            let ref_waveform = self
-                .references
-                .get(&cache.key)
-                .unwrap_or_else(|| panic!("Internal error"));
-            cache.ref_waveform_len = ref_waveform.len() as f64;
-            cache.last_unison = unison;
-            ref_waveform
-        } else {
-            self.references
-                .get(&cache.key)
-                .unwrap_or_else(|| panic!("Internal error"))
-        };
 
         // Render a new waveform.
         let (phase, phase2) = if unison == Unison::Off {
