@@ -1,0 +1,24 @@
+[package]
+name = "pysunfish"
+version = "0.1.0"
+authors = ["Kunal Arya <nobody@kunalarya.com>"]
+edition = "2018"
+
+[lib]
+name = "pysunfish"
+crate-type = ["cdylib"]
+
+[dependencies]
+numpy = "0.14.*"
+ndarray = "0.14.*"
+pyo3 = { version = "0.14.5",  features = ["extension-module"] }
+rand = "0.7.3"
+serde = { version = "1.0.60", features = ["serde_derive"] }
+serde_json = { version = "1.0.59" }
+sunfish-core = { path = "../sunfish-core" }
+
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]

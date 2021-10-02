@@ -112,9 +112,7 @@ impl Interpolator {
             })
             .collect();
 
-        // We only need the first fundamental for sin waves.
-        Self::prerender_all_pure_sines(sample_rate, table_size, &mut cache, &all_freqs[0..1]);
-
+        Self::prerender_all_pure_sines(sample_rate, table_size, &mut cache, &all_freqs);
         Self::prerender_all_soft_saws(sample_rate, table_size, &mut cache, &all_freqs);
         Self::prerender_all_hard_saws(sample_rate, table_size, &mut cache, &all_freqs);
 

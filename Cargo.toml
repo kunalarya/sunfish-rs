@@ -1,4 +1,5 @@
 [workspace]
 members = [
     "sunfish-core",
+    "sunfish-py",
 ]
