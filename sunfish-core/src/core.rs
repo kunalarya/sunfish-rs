@@ -26,7 +26,9 @@ pub struct Voice {
     freq_osc1: f64,
     freq_osc2: f64,
 
-    pitch_bend: f64,       // -1.0 - 1.0
+    #[allow(dead_code)]
+    pitch_bend: f64, // -1.0 - 1.0
+    #[allow(dead_code)]
     pitch_bend_range: f64, // +/- this value.
 
     osc1_fine_offset: f64,
@@ -37,6 +39,7 @@ pub struct Voice {
     osc2_semitones_offset: i32,
     osc2_octave_offset: i32,
 
+    #[allow(dead_code)]
     velocity: i8,
     // Each filter state is per channel (left, right)
     filter1: Vec<Filter>,
