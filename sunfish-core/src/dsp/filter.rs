@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dsp::biquad::{biquad_direct_form_apply, BiquadCoefs};
 use crate::dsp::smoothing::SlewRateLimiter;
@@ -15,7 +15,7 @@ const SLEW_RATE_S: f64 = 1.0 / SLEW_RATE_HZ;
 const SLEW_THRESHOLD_SEMIS: f64 = 0.001;
 const SLEW_THRESHOLD_RES: f64 = 0.001;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum FilterMode {
     LowPass,
     HighPass,

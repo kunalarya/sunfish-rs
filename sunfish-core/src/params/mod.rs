@@ -4,7 +4,7 @@ pub mod types;
 
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dsp::env::ADSR;
 use crate::dsp::filter::FilterMode;
@@ -32,7 +32,7 @@ pub const DEFAULT_CUTOFF_SEMI: f64 = MAX_CUTOFF_SEMI;
 pub const DEFAULT_RESONANCE: f64 = 1.0;
 pub const DEFAULT_ENV_AMT: f64 = 0.2;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SunfishParams {
     pub sample_rate: f64,
 
@@ -55,7 +55,7 @@ pub struct SunfishParams {
     pub output_gain: f64,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OscParams {
     pub enabled: bool,
     pub shape: WaveShape,
@@ -180,7 +180,7 @@ impl Default for OscParams {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FilterParams {
     pub enable: bool,
     pub cutoff_semi: f64,
@@ -298,7 +298,7 @@ impl ADSR {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LfoParams {
     pub target: ModulationTarget,
     pub shape: LfoShape,
@@ -383,7 +383,7 @@ impl Default for LfoParams {
 }
 
 // Enums (TODO: Maybe figure out how to macroize these?)
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum EParam {
     // Oscillators
     Osc1(EOscParams),
@@ -405,7 +405,7 @@ pub enum EParam {
     OutputGain,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum EOscParams {
     Enabled,
     Shape,
@@ -418,7 +418,7 @@ pub enum EOscParams {
     Gain,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum EFiltParams {
     Enable,
     Cutoff,
@@ -427,7 +427,7 @@ pub enum EFiltParams {
     EnvAmt,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum EAdsrParams {
     Attack,
     Decay,
@@ -435,7 +435,7 @@ pub enum EAdsrParams {
     Release,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ELfoParams {
     Target,
     Shape,
