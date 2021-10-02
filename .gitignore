@@ -1,5 +1,5 @@
 **/target
-/target
+target/
 **/*.rs.bk
 *.swp
 *.sw0
@@ -8,3 +8,4 @@
 .ipynb_checkpoints/
 log.txt
 .trash
+__pycache__/
