@@ -21,7 +21,9 @@ pub struct CachedWaveform {
     last_freq: f64,
     last_phase: f64,
     last_phase2: f64,
+    #[allow(dead_code)]
     last_phase3: f64,
+    #[allow(dead_code)]
     last_phase4: f64,
     key: (ShapeKey, HashableF64),
     f_samples: f64,
@@ -72,6 +74,8 @@ impl Frequency {
     }
 }
 
+pub const TABLE_SIZE: usize = 4096;
+
 pub struct Interpolator {
     sample_rate: f64,
     references: RefCache,
@@ -80,8 +84,7 @@ pub struct Interpolator {
 
 impl Interpolator {
     pub fn new(sample_rate: f64) -> Self {
-        let dt = 1.0 / sample_rate;
-        let (mut frequencies, references) = Self::prerender_waves(sample_rate, dt);
+        let (mut frequencies, references) = Self::prerender_waves(sample_rate, TABLE_SIZE);
         frequencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
         Interpolator {
             sample_rate,
@@ -90,30 +93,12 @@ impl Interpolator {
         }
     }
 
-    fn factors(number: f64) -> Vec<u64> {
-        let target = number.ceil() as u64;
-        (2..target + 1)
-            .into_iter()
-            .filter(|&x| target % x == 0)
-            .collect()
-    }
-
-    fn prerender_waves(sample_rate: f64, dt: f64) -> (Vec<f64>, RefCache) {
+    fn prerender_waves(sample_rate: f64, table_size: usize) -> (Vec<f64>, RefCache) {
         // prerender all shapes.
         let mut cache: RefCache = HashMap::new();
 
         // How many semitones to step by when creating reference
-        let midi_step = 4; // 3 per octave
-        let sample_rate_factors: Vec<f64> = Self::factors(sample_rate / 2.0)
-            .into_iter()
-            .map(|x| x as f64)
-            .collect();
-
-        let round_to_sample_rate = |f: f64| {
-            // Bias to lower frequency.
-            let bias_up = false;
-            closest_number_in(f, &sample_rate_factors, bias_up)
-        };
+        let midi_step = 1; // TODO XXX 4; // 3 per octave
 
         // for each shape, render all fundamental frequencies for the mipmap.
         // Max frequency to render:
@@ -125,22 +110,20 @@ impl Interpolator {
                     .get(&note)
                     .expect("NOTE_TO_FREQ missing note")
             })
-            .map(round_to_sample_rate)
             .collect();
 
-        // TODO: Change fundamental frequency to nearest perfect non-sampling
-        // error.
+        // We only need the first fundamental for sin waves.
+        Self::prerender_all_pure_sines(sample_rate, table_size, &mut cache, &all_freqs[0..1]);
 
-        Self::prerender_all_pure_sines(sample_rate, dt, &mut cache, &all_freqs);
-        Self::prerender_all_soft_saws(sample_rate, dt, &mut cache, &all_freqs);
-        Self::prerender_all_hard_saws(sample_rate, dt, &mut cache, &all_freqs);
+        Self::prerender_all_soft_saws(sample_rate, table_size, &mut cache, &all_freqs);
+        Self::prerender_all_hard_saws(sample_rate, table_size, &mut cache, &all_freqs);
 
         (all_freqs, cache)
     }
 
     fn prerender_all_pure_sines(
         sample_rate: f64,
-        dt: f64,
+        table_size: usize,
         cache: &mut RefCache,
         fundamental_freqs: &[f64],
     ) {
@@ -153,21 +136,21 @@ impl Interpolator {
             let key = (shape_key, HashableF64::from_float(*freq));
             cache.insert(
                 key,
-                Self::render_waves(sample_rate, dt, &[Frequency::new(*freq, 1.0, 1.0)]),
+                Self::render_waves(sample_rate, table_size, &[Frequency::new(*freq, 1.0, 1.0)]),
             );
         }
     }
 
     fn prerender_all_soft_saws(
         sample_rate: f64,
-        dt: f64,
+        table_size: usize,
         cache: &mut RefCache,
         fundamental_freqs: &[f64],
     ) {
         let shape_key = WaveShape::SoftSaw.value();
         Self::prerender_saws(
             sample_rate,
-            dt,
+            table_size,
             cache,
             fundamental_freqs,
             shape_key,
@@ -177,14 +160,14 @@ impl Interpolator {
 
     fn prerender_all_hard_saws(
         sample_rate: f64,
-        dt: f64,
+        table_size: usize,
         cache: &mut RefCache,
         fundamental_freqs: &[f64],
     ) {
         let shape_key = WaveShape::HardSaw.value();
         Self::prerender_saws(
             sample_rate,
-            dt,
+            table_size,
             cache,
             fundamental_freqs,
             shape_key,
@@ -194,7 +177,7 @@ impl Interpolator {
 
     fn prerender_saws(
         sample_rate: f64,
-        dt: f64,
+        table_size: usize,
         cache: &mut RefCache,
         fundamental_freqs: &[f64],
         shape_key: u8,
@@ -221,30 +204,23 @@ impl Interpolator {
                 .map(|mult| Frequency::new(mult as f64 * freq, get_amp(mult), mult as f64))
                 .collect();
 
-            cache.insert(key, Self::render_waves(sample_rate, dt, &fparams));
+            cache.insert(key, Self::render_waves(sample_rate, table_size, &fparams));
         }
     }
 
-    pub fn render_waves(sample_rate: f64, dt: f64, fparams: &[Frequency]) -> Vec<f64> {
+    pub fn render_waves(sample_rate: f64, table_size: usize, fparams: &[Frequency]) -> Vec<f64> {
         // Render waves for the given frequencies, added together. Useful for constructing
         // pure tones, sawtooths, triangles, etc.
         //
-        // The fundamental frequency must be the first element.
         let nyquist = sample_rate / 2.0;
 
+        // The fundamental frequency must be the first element.
         let fundamental_freq = fparams[0].f;
-        let samples_float = sample_rate / fundamental_freq;
-        let samples_float_rounded = samples_float.round();
-        let samples = samples_float_rounded as usize;
+        let new_dt = 1.0 / (fundamental_freq * (table_size as f64));
 
-        #[allow(clippy::float_cmp)]
-        if samples_float != samples_float_rounded {
-            println!("Warning: bad reference fundamental frequency; not a multiple of sample rate");
-        }
-
-        let mut rendered: Vec<f64> = Vec::with_capacity(samples);
-        for i in 0..samples {
-            let time = (i as f64) * dt;
+        let mut rendered: Vec<f64> = Vec::with_capacity(table_size);
+        for i in 0..table_size {
+            let time = (i as f64) * new_dt;
             let value = {
                 let mut v = 0.0;
                 for fparam in fparams.iter() {
@@ -284,8 +260,9 @@ impl Interpolator {
         #[allow(clippy::float_cmp)]
         let ref_waveform =
             if last_freq != freq || unison != last_unison || unison_amt != last_unison_amt {
-                // Grab the next mipmap frequency.
+                // Grab the next mipmap frequency; we bias up to ensure we're below nyquist.
                 let bias_up = true;
+
                 let ref_freq = closest_number_in(freq, &self.frequencies, bias_up);
                 let key = (shape.value(), HashableF64::from_float(ref_freq));
                 cache.key = key;
@@ -299,14 +276,14 @@ impl Interpolator {
                 let ref_waveform = self
                     .references
                     .get(&cache.key)
-                    .unwrap_or_else(|| panic!("Internal error"));
+                    .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key));
                 cache.ref_waveform_len = ref_waveform.len() as f64;
                 cache.last_unison = unison;
                 ref_waveform
             } else {
                 self.references
                     .get(&cache.key)
-                    .unwrap_or_else(|| panic!("Internal error"))
+                    .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key))
             };
 
         // Render a new waveform.
@@ -391,6 +368,7 @@ fn closest_number_in(search: f64, freqs: &[f64], bias_up: bool) -> f64 {
 mod test {
     use super::*;
 
+    #[allow(clippy::float_cmp)]
     #[test]
     fn lookup_freq() {
         let fs = [0.0, 5.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0];
@@ -423,25 +401,5 @@ mod test {
         let fs = [5.0, 10.0];
         assert_eq!(closest_number_in(1.0, &fs, true), 5.0);
         assert_eq!(closest_number_in(1.0, &fs, false), 5.0);
-    }
-
-    #[test]
-    fn factors() {
-        fn compute(num: f64) -> Vec<u64> {
-            let mut results = Interpolator::factors(num);
-            results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            results
-        }
-        assert_eq!(compute(145.0), vec![5, 29, 145]);
-        assert_eq!(
-            compute(44100.0),
-            vec![
-                2, 3, 4, 5, 6, 7, 9, 10, 12, 14, 15, 18, 20, 21, 25, 28, 30, 35, 36, 42, 45, 49,
-                50, 60, 63, 70, 75, 84, 90, 98, 100, 105, 126, 140, 147, 150, 175, 180, 196, 210,
-                225, 245, 252, 294, 300, 315, 350, 420, 441, 450, 490, 525, 588, 630, 700, 735,
-                882, 900, 980, 1050, 1225, 1260, 1470, 1575, 1764, 2100, 2205, 2450, 2940, 3150,
-                3675, 4410, 4900, 6300, 7350, 8820, 11025, 14700, 22050, 44100
-            ]
-        );
     }
 }
