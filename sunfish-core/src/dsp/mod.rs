@@ -7,7 +7,7 @@ pub mod osc;
 pub mod resonant_filter;
 pub mod smoothing;
 
-pub const TAU: f64 = (std::f64::consts::PI as f64) * 2.0;
+pub const TAU: f64 = std::f64::consts::PI * 2.0;
 
 type F64AsU = u64;
 
@@ -27,13 +27,7 @@ impl HashableF64 {
 }
 
 fn normalize(mut signal: Vec<f64>) -> Vec<f64> {
-    let max = signal
-        .iter()
-        .map(|f| {
-            let res: f64 = f.abs();
-            res
-        })
-        .fold(f64::NAN, f64::max);
+    let max = signal.iter().map(|f| f.abs()).fold(f64::NAN, f64::max);
     signal.drain(..).map(|f| f / max).collect()
 }
 

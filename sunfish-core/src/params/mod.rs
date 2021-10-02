@@ -76,7 +76,7 @@ impl OscParams {
         new_value: f64,
     ) -> Result<(), ()> {
         match eparam {
-            EOscParams::Enabled => {
+            EOscParams::Enable => {
                 self.enabled = meta.osc_enabled_meta.0.vst_float_to_value(new_value);
             }
             EOscParams::Shape => {
@@ -116,7 +116,7 @@ impl OscParams {
         eparam: EOscParams,
     ) -> Result<f64, ()> {
         Ok(match eparam {
-            EOscParams::Enabled => meta.osc_enabled_meta.0.value_to_vst_float(self.enabled),
+            EOscParams::Enable => meta.osc_enabled_meta.0.value_to_vst_float(self.enabled),
             EOscParams::Shape => meta.osc_shape_meta.0.value_to_vst_float(self.shape),
             EOscParams::FineOffset => meta
                 .osc_fine_offset_meta
@@ -145,7 +145,7 @@ impl OscParams {
 
     fn format_value(&self, meta: &SunfishParamsMeta, eparam: EOscParams) -> Result<String, ()> {
         Ok(match eparam {
-            EOscParams::Enabled => meta.osc_enabled_meta.1.format_value(self.enabled),
+            EOscParams::Enable => meta.osc_enabled_meta.1.format_value(self.enabled),
             EOscParams::Shape => meta.osc_shape_meta.1.format_value(self.shape),
             EOscParams::FineOffset => meta.osc_fine_offset_meta.1.format_value(self.fine_offset),
             EOscParams::SemitonesOffset => meta
@@ -407,7 +407,7 @@ pub enum EParam {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum EOscParams {
-    Enabled,
+    Enable,
     Shape,
     FineOffset,
     SemitonesOffset,
@@ -506,7 +506,7 @@ impl EParam {
 impl EOscParams {
     fn as_string(&self, _short: bool) -> String {
         let s = match self {
-            Self::Enabled => "Enabled",
+            Self::Enable => "Enable",
             Self::Shape => "Shape",
             Self::FineOffset => "Offset (Fine)",
             Self::SemitonesOffset => "Offset (Semitones)",
@@ -520,7 +520,7 @@ impl EOscParams {
     }
     fn get_names() -> Vec<(EOscParams, String)> {
         vec![
-            (Self::Enabled, "Enabled".to_owned()),
+            (Self::Enable, "Enable".to_owned()),
             (Self::Shape, "Shape".to_owned()),
             (Self::FineOffset, "Offset (Fine)".to_owned()),
             (Self::SemitonesOffset, "Offset (Semitones)".to_owned()),
