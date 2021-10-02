@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dsp::TAU;
 use crate::util::enumerable::Enumerable;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum LfoShape {
     Sine,
     Saw,
@@ -52,7 +52,7 @@ impl From<String> for LfoShape {
 }
 
 // Discrete, synced LFO rate.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum LfoRateSync {
     R1_64,
     R1_32,
@@ -143,7 +143,7 @@ impl Enumerable<LfoRateSync> for LfoRateSync {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Rate {
     Hz(f64),
     Synced(LfoRateSync),

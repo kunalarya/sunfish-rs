@@ -1,9 +1,9 @@
 /// Envelope generator.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::util;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ADSR {
     pub attack: f64,
     pub decay: f64,

@@ -1,10 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::util::enumerable::Enumerable;
 
 /// The VST parameter representation of a modulation
 /// target.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ModulationTarget {
     Off,
     Osc1Frequency,
