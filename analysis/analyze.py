@@ -22,6 +22,7 @@ TAU = 2.0 * np.pi
 
 
 # Default arguments
+DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_SHAPE = "Sine"
 DEFAULT_NOTE_START = 30
 DEFAULT_NOTE_END = 155
@@ -86,6 +87,13 @@ def main():
         help=f"Name of the colormap for spectral plots (default: {DEFAULT_COLORMAP}).",
         default=DEFAULT_COLORMAP,
     )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        action="store",
+        help=f"Chunk size for rendering (default: {DEFAULT_CHUNK_SIZE})",
+        default=DEFAULT_CHUNK_SIZE,
+    )
     args = parser.parse_args()
     if args.spectra:
         heatmap(
@@ -101,6 +109,7 @@ def main():
             time_sec=args.length,
             note=args.note_start,
             shape=args.shape,
+            chunk_size=args.chunk_size,
             cut_start=args.cut_start,
             cut_end=args.cut_end,
             smooth_samples=args.smooth,
@@ -125,10 +134,10 @@ def plot_waves(
     note: int,
     shape: str,
     smooth_samples: int,
+    chunk_size: int,
     cut_start: Optional[int] = None,
     cut_end: Optional[int] = None,
 ):
-    chunk_size = 1024
 
     buf_len = int(time_sec * SAMPLE_RATE)
 
