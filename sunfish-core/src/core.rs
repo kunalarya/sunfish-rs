@@ -20,6 +20,17 @@ use crate::util::note_freq::NOTE_TO_FREQ;
 pub const CHANNEL_COUNT: usize = 2;
 pub const VOICES_MAX: usize = 128;
 
+#[derive(Clone, Copy, Debug)]
+pub struct FineOffset(pub f64);
+#[derive(Clone, Copy, Debug)]
+pub struct SemitonesOffset(pub i32);
+#[derive(Clone, Copy, Debug)]
+pub struct OctaveOffset(pub i32);
+#[derive(Clone, Copy, Debug)]
+pub struct PitchBendOffset(pub f64);
+#[derive(Clone, Copy, Debug)]
+pub struct PitchBendRange(pub f64);
+
 #[derive(Debug)]
 pub struct Voice {
     base_note: u8,
@@ -27,17 +38,17 @@ pub struct Voice {
     freq_osc2: f64,
 
     #[allow(dead_code)]
-    pitch_bend: f64, // -1.0 - 1.0
+    pitch_bend: PitchBendOffset, // -1.0 - 1.0
     #[allow(dead_code)]
-    pitch_bend_range: f64, // +/- this value.
+    pitch_bend_range: PitchBendRange, // +/- this value.
 
-    osc1_fine_offset: f64,
-    osc1_semitones_offset: i32,
-    osc1_octave_offset: i32,
+    osc1_fine_offset: FineOffset,
+    osc1_semitones_offset: SemitonesOffset,
+    osc1_octave_offset: OctaveOffset,
 
-    osc2_fine_offset: f64,
-    osc2_semitones_offset: i32,
-    osc2_octave_offset: i32,
+    osc2_fine_offset: FineOffset,
+    osc2_semitones_offset: SemitonesOffset,
+    osc2_octave_offset: OctaveOffset,
 
     #[allow(dead_code)]
     velocity: i8,
@@ -105,16 +116,16 @@ impl Voice {
             freq_osc2: 0.0,
 
             // TODO: Support pitch bending.
-            pitch_bend: 0.0,
-            pitch_bend_range: 1.0,
+            pitch_bend: PitchBendOffset(0.0),
+            pitch_bend_range: PitchBendRange(1.0),
 
-            osc1_fine_offset,
-            osc1_semitones_offset,
-            osc1_octave_offset,
+            osc1_fine_offset: FineOffset(osc1_fine_offset),
+            osc1_semitones_offset: SemitonesOffset(osc1_semitones_offset),
+            osc1_octave_offset: OctaveOffset(osc1_octave_offset),
 
-            osc2_fine_offset,
-            osc2_semitones_offset,
-            osc2_octave_offset,
+            osc2_fine_offset: FineOffset(osc2_fine_offset),
+            osc2_semitones_offset: SemitonesOffset(osc2_semitones_offset),
+            osc2_octave_offset: OctaveOffset(osc2_octave_offset),
 
             velocity,
             filter1,
@@ -139,6 +150,8 @@ impl Voice {
             self.osc1_fine_offset,
             self.osc1_octave_offset,
             self.osc1_semitones_offset,
+            self.pitch_bend,
+            self.pitch_bend_range,
         );
     }
 
@@ -150,24 +163,28 @@ impl Voice {
             self.osc2_fine_offset,
             self.osc2_octave_offset,
             self.osc2_semitones_offset,
+            self.pitch_bend,
+            self.pitch_bend_range,
         );
     }
 
     fn calculate_freq(
         &mut self,
-        fine_offset: f64,
-        octave_offset: i32,
-        semitones_offset: i32,
+        fine_offset: FineOffset,
+        octave_offset: OctaveOffset,
+        semitones_offset: SemitonesOffset,
+        _pitch_bend: PitchBendOffset,
+        _pitch_bend_range: PitchBendRange,
     ) -> f64 {
         let note = self.base_note as i32;
         // Add octaves.
-        let note = note + (octave_offset * 12);
+        let note = note + (octave_offset.0 * 12);
         // Add semitones.
-        let note = note + semitones_offset;
+        let note = note + semitones_offset.0;
 
         let freq = *NOTE_TO_FREQ.get(&note).unwrap_or(&0.0);
         // TODO: Pitch bending.
-        freq + fine_offset
+        freq + fine_offset.0
     }
 }
 
@@ -342,10 +359,11 @@ impl Sunfish {
                 for (_, voices) in self.voices.iter_mut() {
                     for (_, voice) in voices.iter_mut().enumerate() {
                         voice.osc1_semitones_offset =
-                            self.modulation.params.modulated.osc1.semitones_offset;
+                            SemitonesOffset(self.modulation.params.modulated.osc1.semitones_offset);
                         voice.osc1_octave_offset =
-                            self.modulation.params.modulated.osc1.octave_offset;
-                        voice.osc1_fine_offset = self.modulation.params.modulated.osc1.fine_offset;
+                            OctaveOffset(self.modulation.params.modulated.osc1.octave_offset);
+                        voice.osc1_fine_offset =
+                            FineOffset(self.modulation.params.modulated.osc1.fine_offset);
                         voice.update_osc1_freq();
                     }
                 }
@@ -356,10 +374,11 @@ impl Sunfish {
                 for (_, voices) in self.voices.iter_mut() {
                     for (_, voice) in voices.iter_mut().enumerate() {
                         voice.osc2_semitones_offset =
-                            self.modulation.params.modulated.osc2.semitones_offset;
+                            SemitonesOffset(self.modulation.params.modulated.osc2.semitones_offset);
                         voice.osc2_octave_offset =
-                            self.modulation.params.modulated.osc2.octave_offset;
-                        voice.osc2_fine_offset = self.modulation.params.modulated.osc2.fine_offset;
+                            OctaveOffset(self.modulation.params.modulated.osc2.octave_offset);
+                        voice.osc2_fine_offset =
+                            FineOffset(self.modulation.params.modulated.osc2.fine_offset);
                         voice.update_osc2_freq();
                     }
                 }
