@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "copy_from",
+    "copy_from_derive",
     "sunfish-core",
     "sunfish-py",
     "sunfish-standalone",

@@ -44,8 +44,16 @@ impl CoreWrapper {
     pub fn update_param(&mut self, param_name: &str, param_value: f64) -> PyResult<()> {
         let eparam: EParam = serde_json::from_str(param_name)
             .map_err(|err| exceptions::PyValueError::new_err(err.to_string()))?;
-        self.inst
-            .notify_param_update(eparam, param_value, self.tempo_bps);
+        core::Sunfish::on_param_update(
+            &self.inst.meta,
+            &mut self.inst.params,
+            &mut self.inst.params_modulated,
+            &self.inst.tempo,
+            &mut self.inst.voices,
+            &mut self.inst.modulation,
+            eparam,
+            param_value,
+        );
         Ok(())
     }
 

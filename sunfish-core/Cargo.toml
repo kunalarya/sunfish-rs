@@ -2,7 +2,7 @@
 name = "sunfish-core"
 version = "0.1.0"
 authors = ["Kunal Arya <me@example.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "sunfish"
@@ -15,6 +15,8 @@ debug = true
 [dependencies]
 anyhow = "1.0"
 async-std = "1.6.5"
+crossbeam = "0.8.1"
+copy_from = { path = "../copy_from" }
 bytemuck = { version = "1.4", features = ["derive"] }
 futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
 image = "0.23"

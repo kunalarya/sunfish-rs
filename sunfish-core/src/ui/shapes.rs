@@ -93,7 +93,7 @@ impl ScreenMetrics {
         self.norm_y_to_corrected(y) * self.height_f32
     }
 
-    pub fn constrain_resize(&self, new_width: u32, new_height: u32, ratio: f32) -> (u32, u32) {
+    pub fn constrain_resize(&self, new_width: u32, new_height: u32, _ratio: f32) -> (u32, u32) {
         let new_width_f32 = new_width as f32;
         let new_height_f32 = new_height as f32;
         let new_ratio = new_width_f32 / new_height_f32;
@@ -119,11 +119,6 @@ impl ScreenMetrics {
         // ratio = w / h
         // thus h = w / ratio
         let correct_height = !same_width || new_ratio > self.ratio;
-        // Likewise if the new ratio is smaller, the height
-        // has become longer, so we'll increase width.
-        // ratio = w / h
-        // thus w = h * ratio
-        let correct_width = !same_height || new_ratio < self.ratio;
         if correct_height {
             let corrected_height = (new_width_f32 / self.ratio).round() as u32;
             let (w, h) = (new_width, corrected_height);

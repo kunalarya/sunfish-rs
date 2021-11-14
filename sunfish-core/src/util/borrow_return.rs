@@ -1,3 +1,4 @@
+use std::ops::{Deref, DerefMut};
 /// A autoborrow lets you borrow an owned object and automatically
 /// return it back when the borrow is dropped.
 use std::sync::{Arc, Mutex};
@@ -45,5 +46,19 @@ impl<T> Borrower<T> {
             grabbed: Some(val),
             owner,
         }
+    }
+}
+
+impl<T> Deref for Borrower<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.grabbed.as_ref().unwrap()
+    }
+}
+
+impl<T> DerefMut for Borrower<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.grabbed.as_mut().unwrap()
     }
 }

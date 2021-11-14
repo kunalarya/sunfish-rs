@@ -5,7 +5,6 @@ pub mod lfo;
 pub mod modulation;
 pub mod params;
 pub mod plugin;
-pub mod swarc;
 pub mod ui;
 pub mod util;
 
@@ -66,7 +65,7 @@ impl Plugin for plugin::SunfishPlugin {
             // explicit anyways.
             outputs: core::CHANNEL_COUNT as i32,
 
-            parameters: self.core.modulation.params.meta.count() as i32,
+            parameters: self.core.meta.count() as i32,
 
             // Set our category
             category: Category::Synth,
@@ -81,20 +80,13 @@ impl Plugin for plugin::SunfishPlugin {
 
     fn get_parameter_name(&self, index: i32) -> String {
         self.core
-            .modulation
             .params
-            .baseline
-            .get_name(&self.core.modulation.params.meta, index as usize)
-            .unwrap_or_else(|_| "(error)".to_string())
+            .parameter_name(&self.core.meta, index as usize)
     }
 
     fn get_parameter_text(&self, index: i32) -> String {
-        self.core
-            .modulation
-            .params
-            .baseline
-            .formatted_value_by_index(&self.core.modulation.params.meta, index as usize)
-            .unwrap_or_else(|_| "(error)".to_string())
+        let eparam = self.core.meta.parameter_index(index as usize);
+        self.core.params.formatted_value(&self.core.meta, eparam)
     }
 
     fn get_parameter_label(&self, _index: i32) -> String {
@@ -102,46 +94,13 @@ impl Plugin for plugin::SunfishPlugin {
     }
 
     fn get_parameter(&self, index: i32) -> f32 {
-        self.core
-            .modulation
-            .params
-            .baseline
-            .get_param_by_index(&self.core.modulation.params.meta, index as usize)
-            .unwrap_or(0.0) as f32
+        let eparam = self.core.meta.parameter_index(index as usize);
+        self.core.params.read_parameter(&self.core.meta, eparam) as f32
     }
 
     fn set_parameter(&mut self, index: i32, value: f32) {
-        let value = value as f64;
-        let notification = self
-            .core
-            .modulation
-            .params
-            .baseline_writer
-            .update_param_by_index(&self.core.modulation.params.meta, index as usize, value);
-        if let Ok(eparam) = notification {
-            self.core
-                .notify_param_update(eparam, value, self.tempo.tempo_bps);
-            let meta = &self.core.modulation.params.meta;
-
-            // Try to update the GUI
-            // TODO: Consolidate all of this logic with the GUI -- it's identical
-            if let Ok(ref mut for_gui_deltas) = self.for_gui_deltas.try_lock() {
-                if self.for_gui_deltas_pending.any_changed() {
-                    self.for_gui_deltas_pending_tracker.refresh_changed(
-                        &self.core.modulation.params.meta,
-                        &self.for_gui_deltas_pending,
-                    );
-                    for updated_eparam in &self.for_gui_deltas_pending_tracker.changed_list_cached {
-                        for_gui_deltas.set_changed(&meta, &updated_eparam);
-                    }
-                    self.for_gui_deltas_pending.reset();
-                }
-                for_gui_deltas.set_changed(&meta, &eparam);
-            } else {
-                // store into pending
-                self.for_gui_deltas_pending.set_changed(&meta, &eparam);
-            }
-        }
+        let eparam = self.core.meta.parameter_index(index as usize);
+        self.core.params_sync.write_parameter(eparam, value as f64);
     }
 
     fn can_be_automated(&self, _index: i32) -> bool {
@@ -151,7 +110,7 @@ impl Plugin for plugin::SunfishPlugin {
     fn set_sample_rate(&mut self, rate: f32) {
         let rate = rate as f64;
         self.core.update_sample_rate(rate);
-        self.core.modulation.params.update_sample_rate(rate);
+        self.core.params.update_sample_rate(rate);
         self.core.dt = 1.0 / rate;
     }
 
@@ -233,7 +192,7 @@ impl plugin::SunfishPlugin {
 
             if let Some(time_info) = time_info_opt {
                 let tempo_bpm_f64 = time_info.tempo;
-                self.tempo.update(tempo_bpm_f64);
+                self.core.tempo.update(tempo_bpm_f64);
             }
         }
 
@@ -255,7 +214,7 @@ impl plugin::SunfishPlugin {
         }
 
         // Resolve parameter updates from the GUI.
-        self.handle_gui_and_host_parameter_updates();
+        self.update_host_parameters();
 
         self.core.render(&mut v[..ch_count]);
     }

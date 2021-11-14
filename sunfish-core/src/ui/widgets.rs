@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::params::NormalizedParams;
-use crate::params::{EParam, SunfishParams, SunfishParamsMeta};
-use crate::swarc;
+use crate::params::sync::Synchronizer;
+use crate::params::{EParam, ParamsMeta};
 use crate::ui::alignment::{HorizontalAlign, VerticalAlign};
 use crate::ui::coords::{Coord2, Rect};
 use crate::ui::shapes;
@@ -17,6 +16,9 @@ const DEFAULT_TEXT_COLOR: Color = Color {
     g: 0.0,
     b: 0.0,
 };
+
+#[allow(dead_code)]
+const TOGGLE_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
 
 #[derive(Copy, Clone, Debug)]
 pub struct SpriteIndex(usize);
@@ -57,8 +59,9 @@ impl WidgetId {
 }
 
 struct UpdateContext<'a> {
-    meta: &'a Arc<SunfishParamsMeta>,
-    params: &'a swarc::ArcReader<SunfishParams>,
+    #[allow(dead_code)]
+    meta: &'a Arc<ParamsMeta>,
+    params: &'a Synchronizer,
     id: &'a WidgetId,
     rect: &'a Rect,
     screen_metrics: &'a shapes::ScreenMetrics,
@@ -69,7 +72,7 @@ struct UpdateContext<'a> {
 
 #[derive(Debug)]
 pub struct Widget {
-    meta: Arc<SunfishParamsMeta>,
+    meta: Arc<ParamsMeta>,
     pub id: WidgetId,
     pub rect: Rect,
     pub value: f64, // Normalized between 0.0 and 1.0
@@ -80,7 +83,7 @@ pub struct Widget {
 
 impl Widget {
     pub fn new(
-        meta: Arc<SunfishParamsMeta>,
+        meta: Arc<ParamsMeta>,
         id: WidgetId,
         rect: Rect,
         value: f64,
@@ -170,13 +173,13 @@ impl Widget {
         screen_metrics: &shapes::ScreenMetrics,
         spritesheet: &mut sprites::SpriteSheet,
         shapes: &mut shapes::Shapes,
-        params: &swarc::ArcReader<SunfishParams>,
+        params: &Synchronizer,
     ) {
         let value = self.tentative_value.unwrap_or(self.value);
 
         let mut ctx = UpdateContext {
             meta: &self.meta,
-            params: &params,
+            params,
             id: &self.id,
             rect: &self.rect,
             screen_metrics,
@@ -206,12 +209,12 @@ impl Widget {
         screen_metrics: &shapes::ScreenMetrics,
         spritesheet: &mut sprites::SpriteSheet,
         shapes: &mut shapes::Shapes,
-        params: &swarc::ArcReader<SunfishParams>,
+        params: &Synchronizer,
     ) {
         let value = self.tentative_value.unwrap_or(self.value);
         let mut ctx = UpdateContext {
             meta: &self.meta,
-            params: &params,
+            params,
             id: &self.id,
             rect: &self.rect,
             screen_metrics,
@@ -266,7 +269,7 @@ pub struct Knob {
     arc: shapes::Arc,
     arc_color: Color,
     notch_color: Color,
-    sprite_index: SpriteIndex,
+    _sprite_index: SpriteIndex,
     arc_index: ShapeIndex,
     inner_notch_index: ShapeIndex,
     outline_index: ShapeIndex,
@@ -277,6 +280,7 @@ pub struct Knob {
 }
 
 impl Knob {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rect: &Rect,
         polarity: Polarity,
@@ -287,13 +291,13 @@ impl Knob {
         value_text: Text,
         value_text_color: Color,
     ) -> Self {
-        let arc = Self::create_arc(&rect, &polarity, value, &arc_color, KNOB_ARC_WIDTH);
+        let arc = Self::create_arc(rect, &polarity, value, &arc_color, KNOB_ARC_WIDTH);
         Knob {
             polarity,
             arc,
             arc_color,
             notch_color,
-            sprite_index: SpriteIndex(0),
+            _sprite_index: SpriteIndex(0),
             arc_index: ShapeIndex(0),
             inner_notch_index: ShapeIndex(0),
             outline_index: ShapeIndex(0),
@@ -304,8 +308,9 @@ impl Knob {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_widget(
-        meta: Arc<SunfishParamsMeta>,
+        meta: Arc<ParamsMeta>,
         id: WidgetId,
         rect: Rect,
         polarity: Polarity,
@@ -430,7 +435,7 @@ impl Knob {
         if KNOB_DEBUG_OUTLINE {
             self.outline_index = ShapeIndex({
                 let buffers = shapes::rectangle_outline(
-                    &rect,
+                    rect,
                     screen_metrics,
                     KNOB_OUTLINE_WIDTH,
                     &KNOB_DEBUG_OUTLINE_COLOR,
@@ -452,7 +457,7 @@ impl Knob {
         });
 
         self.circle_index = ShapeIndex({
-            let buffers = shapes::circle_outline(&rect, screen_metrics, 0.001);
+            let buffers = shapes::circle_outline(rect, screen_metrics, 0.001);
             let max_v_count = buffers.vertices.len();
             let max_i_count = buffers.indices.len();
             shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count))
@@ -508,14 +513,8 @@ impl Knob {
         );
 
         // Update value label.
-        match ctx.id {
-            WidgetId::Bound { eparam } => {
-                self.value_text.value = ctx
-                    .params
-                    .formatted_value(ctx.meta, *eparam)
-                    .unwrap_or("{error}".to_string());
-            }
-            _ => {}
+        if let WidgetId::Bound { eparam } = ctx.id {
+            self.value_text.value = ctx.params.formatted_value(*eparam);
         }
     }
 
@@ -540,6 +539,7 @@ pub struct VSlider {
 }
 
 impl VSlider {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         VSlider {
             outer_shape_index: ShapeIndex(0),
@@ -548,12 +548,7 @@ impl VSlider {
         }
     }
 
-    pub fn new_widget(
-        meta: Arc<SunfishParamsMeta>,
-        id: WidgetId,
-        rect: Rect,
-        value: f64,
-    ) -> Widget {
+    pub fn new_widget(meta: Arc<ParamsMeta>, id: WidgetId, rect: Rect, value: f64) -> Widget {
         let vslider = Self::new();
         Widget::new(meta, id, rect, value, WidgetClass::VSlider(vslider))
     }
@@ -567,7 +562,7 @@ impl VSlider {
         shapes: &mut shapes::Shapes,
     ) {
         let buffers =
-            shapes::rectangle_outline(&rect, screen_metrics, 0.001, &VSLIDER_OUTLINE_COLOR);
+            shapes::rectangle_outline(rect, screen_metrics, 0.001, &VSLIDER_OUTLINE_COLOR);
         let max_v_count = buffers.vertices.len();
         let max_i_count = buffers.indices.len();
         let outer_shape_index =
@@ -652,7 +647,7 @@ impl Spinner {
     }
 
     pub fn new_widget(
-        meta: Arc<SunfishParamsMeta>,
+        meta: Arc<ParamsMeta>,
         id: WidgetId,
         rect: Rect,
         value: f64,
@@ -683,14 +678,8 @@ impl Spinner {
     }
 
     fn update(&mut self, ctx: &mut UpdateContext, _value: f64) {
-        match ctx.id {
-            WidgetId::Bound { eparam } => {
-                self.value_text.value = ctx
-                    .params
-                    .formatted_value(ctx.meta, *eparam)
-                    .unwrap_or("{error}".to_string());
-            }
-            _ => {}
+        if let WidgetId::Bound { eparam } = ctx.id {
+            self.value_text.value = ctx.params.formatted_value(*eparam);
         }
     }
 
@@ -746,7 +735,7 @@ impl Panel {
     }
 
     pub fn new_widget(
-        meta: Arc<SunfishParamsMeta>,
+        meta: Arc<ParamsMeta>,
         id: WidgetId,
         rect: Rect,
         label: Option<Text>,
@@ -762,7 +751,7 @@ impl Panel {
         _spritesheet: &mut sprites::SpriteSheet,
         shapes: &mut shapes::Shapes,
     ) {
-        let buffers = shapes::rectangle_outline(&rect, screen_metrics, 0.003, &PANEL_OUTLINE_COLOR);
+        let buffers = shapes::rectangle_outline(rect, screen_metrics, 0.003, &PANEL_OUTLINE_COLOR);
         let max_v_count = buffers.vertices.len();
         let max_i_count = buffers.indices.len();
         self.outline_index =
@@ -783,11 +772,9 @@ impl Panel {
     }
 }
 
-const TOGGLE_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
-
 #[derive(Debug)]
 pub struct Toggle {
-    outline_index: ShapeIndex,
+    _outline_index: ShapeIndex,
     thumb_index: ShapeIndex,
     label: Option<Text>,
 }
@@ -795,14 +782,14 @@ pub struct Toggle {
 impl Toggle {
     pub fn new(label: Option<Text>) -> Self {
         Toggle {
-            outline_index: ShapeIndex(0),
+            _outline_index: ShapeIndex(0),
             thumb_index: ShapeIndex(0),
             label,
         }
     }
 
     pub fn new_widget(
-        meta: Arc<SunfishParamsMeta>,
+        meta: Arc<ParamsMeta>,
         id: WidgetId,
         rect: Rect,
         value: f64,
@@ -819,13 +806,13 @@ impl Toggle {
         value: f64,
         shapes: &mut shapes::Shapes,
     ) {
-        let buffers = Self::create_outline(rect, screen_metrics);
-        let max_v_count = buffers.vertices.len();
-        let max_i_count = buffers.indices.len();
-        //let outline_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+        // let buffers = Self::create_outline(rect, screen_metrics);
+        // let max_v_count = buffers.vertices.len();
+        // let max_i_count = buffers.indices.len();
+        // let outline_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
 
         // TODO: Value computation
-        let buffers = Self::create_thumb(&rect, screen_metrics, value);
+        let buffers = Self::create_thumb(rect, screen_metrics, value);
         let max_v_count = buffers.vertices.len();
         let max_i_count = buffers.indices.len();
         let thumb_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
@@ -844,13 +831,16 @@ impl Toggle {
         shapes::rectangle_solid(r, screen_metrics)
     }
 
-    fn create_outline(rect: &Rect, screen_metrics: &shapes::ScreenMetrics) -> shapes::Buffers {
-        shapes::rectangle_outline(&rect, screen_metrics, 0.001, &TOGGLE_OUTLINE_COLOR)
+    fn _create_outline(rect: &Rect, screen_metrics: &shapes::ScreenMetrics) -> shapes::Buffers {
+        shapes::rectangle_outline(rect, screen_metrics, 0.001, &TOGGLE_OUTLINE_COLOR)
     }
 
     fn on_dragging(&mut self, value: f64) -> f64 {
-        let value = if value >= 0.5 { 0.0 } else { 1.0 };
-        value
+        if value >= 0.5 {
+            0.0
+        } else {
+            1.0
+        }
     }
 
     fn update(&mut self, ctx: &mut UpdateContext, value: f64) {

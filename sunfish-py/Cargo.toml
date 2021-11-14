@@ -2,7 +2,7 @@
 name = "pysunfish"
 version = "0.1.0"
 authors = ["Kunal Arya <nobody@kunalarya.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "pysunfish"

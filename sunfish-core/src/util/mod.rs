@@ -1,6 +1,7 @@
 pub mod borrow_return;
 pub mod enumerable;
 pub mod errors;
+pub mod mailbox;
 pub mod note_freq;
 pub mod test_utils;
 
