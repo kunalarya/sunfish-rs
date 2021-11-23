@@ -138,6 +138,7 @@ impl Synchronizer {
             }
         } else {
             self.on_deck.insert(eparam, value);
+            self.params_copy.write_parameter(&self.meta, eparam, value);
         }
     }
 
