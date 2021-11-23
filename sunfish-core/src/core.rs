@@ -343,7 +343,6 @@ impl Sunfish {
         param: EParam,
         param_value: f64,
     ) {
-        log::info!("on_param_update: {:?} -> {:?}", param, param_value);
         // TODO: Hacky: we should do something more intelligent here.
         let previous_modulated_param = modulation.on_param_update_before_mod_update(
             meta,
@@ -477,7 +476,6 @@ impl Sunfish {
                 // if the existing epoch is newer than the last one we saw, apply changes to the
                 // mirror to ensure nothing is lost.
                 for (eparam, value) in changes {
-                    //self.on_param_update(*eparam, *value);
                     Self::on_param_update(
                         &self.meta,
                         &mut self.params,
@@ -500,11 +498,9 @@ impl Sunfish {
             self.modulation
                 .tick(delta_time, &self.params, &mut self.params_modulated);
         if let Some(eparam_lfo1) = update_eparam_lfo1 {
-            //self.update_voices(eparam_lfo1);
             Self::update_voices(&mut self.voices, &mut self.params_modulated, eparam_lfo1);
         }
         if let Some(eparam_lfo2) = update_eparam_lfo2 {
-            //    self.update_voices(eparam_lfo2);
             Self::update_voices(&mut self.voices, &mut self.params_modulated, eparam_lfo2);
         }
 

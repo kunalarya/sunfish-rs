@@ -13,7 +13,7 @@ pub struct Styling {
     pub size: (i32, i32),
     pub background: Background,
     pub padding: (f32, f32),
-    pub spritesheet: Option<String>,
+    pub background_image: Option<String>,
     elements: Vec<Element>,
 }
 

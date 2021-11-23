@@ -278,7 +278,7 @@ pub struct Knob {
     arc_index: ShapeIndex,
     inner_notch_index: ShapeIndex,
     outline_index: ShapeIndex,
-    circle_index: ShapeIndex,
+    _circle_index: ShapeIndex,
     label: Option<Text>,
     value_text: Text,
     value_text_color: Color,
@@ -306,7 +306,7 @@ impl Knob {
             arc_index: ShapeIndex(0),
             inner_notch_index: ShapeIndex(0),
             outline_index: ShapeIndex(0),
-            circle_index: ShapeIndex(0),
+            _circle_index: ShapeIndex(0),
             label,
             value_text,
             value_text_color,
@@ -461,12 +461,12 @@ impl Knob {
             ))
         });
 
-        self.circle_index = ShapeIndex({
-            let buffers = shapes::circle_outline(rect, screen_metrics, 0.001);
-            let max_v_count = buffers.vertices.len();
-            let max_i_count = buffers.indices.len();
-            shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count))
-        });
+        // self.circle_index = ShapeIndex({
+        //     let buffers = shapes::circle_outline(rect, screen_metrics, 0.001);
+        //     let max_v_count = buffers.vertices.len();
+        //     let max_i_count = buffers.indices.len();
+        //     shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count))
+        // });
     }
 
     fn on_resize(&mut self, ctx: &mut UpdateContext, value: f64) {
@@ -482,9 +482,9 @@ impl Knob {
                 .update(self.outline_index.0, &buffers.vertices, &buffers.indices);
         }
 
-        let buffers = shapes::circle_outline(ctx.rect, ctx.screen_metrics, 0.001);
-        ctx.shapes
-            .update(self.circle_index.0, &buffers.vertices, &buffers.indices);
+        // let buffers = shapes::circle_outline(ctx.rect, ctx.screen_metrics, 0.001);
+        // ctx.shapes
+        //     .update(self.circle_index.0, &buffers.vertices, &buffers.indices);
     }
 
     fn update(&mut self, ctx: &mut UpdateContext, value: f64) {

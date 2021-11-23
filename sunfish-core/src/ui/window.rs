@@ -128,8 +128,8 @@ struct RenderState {
     _aspect_ratio: f32,
 
     background: [f64; 3],
-    spritesheet: sprites::SpriteSheet,
-    bound_spritesheet: sprites::BoundSpriteSheet,
+    background_image: sprites::SpriteSheet,
+    bound_background_image: sprites::BoundSpriteSheet,
     shapes: shapes::Shapes,
     bound_shapes: shapes::BoundShapes,
     glyph_brush: GlyphBrush<(), ab_glyph::FontArc, RandomXxHashBuilder64>,
@@ -186,8 +186,8 @@ impl RenderState {
         /////////////////////////////////////////////////////////////////
         // Sprites
         /////////////////////////////////////////////////////////////////
-        let spritesheet_base_filename = styling
-            .spritesheet
+        let background_base_filename = styling
+            .background_image
             .as_ref()
             .cloned()
             .unwrap_or_else(|| "synthsheet.png".to_string());
@@ -200,7 +200,7 @@ impl RenderState {
             base.join("assets")
         };
 
-        let filename = assets_folder.join(spritesheet_base_filename);
+        let filename = assets_folder.join(background_base_filename);
         log::info!("Sprite base filename: {:?}", filename);
 
         let mut spritesheet =
@@ -299,8 +299,8 @@ impl RenderState {
 
             default_padding: Coord2::new(styling.padding.0, styling.padding.1),
 
-            spritesheet,
-            bound_spritesheet,
+            background_image: spritesheet,
+            bound_background_image: bound_spritesheet,
             shapes,
             bound_shapes,
             glyph_brush,
@@ -333,7 +333,7 @@ impl RenderState {
         for (_widget_id, widget) in widgets.iter_mut() {
             widget.on_resize(
                 &self.screen_metrics,
-                &mut self.spritesheet,
+                &mut self.background_image,
                 &mut self.shapes,
                 params,
             );
@@ -345,13 +345,16 @@ impl RenderState {
         for (_widget_id, widget) in widgets.iter_mut() {
             widget.update(
                 &self.screen_metrics,
-                &mut self.spritesheet,
+                &mut self.background_image,
                 &mut self.shapes,
                 params,
             );
         }
-        self.bound_spritesheet
-            .update(&self.device, &self.spritesheet, &self.screen_metrics);
+        self.bound_background_image.update(
+            &self.device,
+            &self.background_image,
+            &self.screen_metrics,
+        );
     }
 
     async fn render(&mut self, widgets: &mut WidgetMap) {
@@ -397,7 +400,8 @@ impl RenderState {
                 depth_stencil_attachment: None,
             });
             // Render sprites first, then shapes.
-            let rpass = sprites::render(&self.bound_spritesheet, rpass, &self.spritesheet);
+            let rpass =
+                sprites::render(&self.bound_background_image, rpass, &self.background_image);
             shapes::render(&self.bound_shapes, rpass);
         }
 
