@@ -63,7 +63,6 @@ impl Synchronizer {
     }
 
     pub fn subscriber(&mut self) -> Subscriber {
-        // TODO: This should go in the
         let subscriber = Subscriber {
             changes: Arc::new(Mutex::new(HashMap::new())),
             last_epoch: Arc::new(AtomicU32::new(0)),
@@ -138,6 +137,7 @@ impl Synchronizer {
             }
         } else {
             self.on_deck.insert(eparam, value);
+            self.params_copy.write_parameter(&self.meta, eparam, value);
         }
     }
 

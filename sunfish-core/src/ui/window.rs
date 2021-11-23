@@ -8,7 +8,7 @@ use wgpu;
 use wgpu_glyph::{ab_glyph, GlyphBrush, GlyphBrushBuilder, Section, Text};
 use wgpu_glyph::{HorizontalAlign, Layout, VerticalAlign};
 use winit::{
-    event::{ElementState, Event, MouseButton, WindowEvent},
+    event::{ElementState, Event, MouseButton, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
@@ -27,7 +27,7 @@ const DRAG_FACTOR_SLOW: f32 = 0.7;
 const TICK_PER_SEC: f32 = 60.0; // 240.0;
 
 /// How often to query the host for parameter updates (and thus update the GUI).
-const PARAM_SYNC_PER_SEC: f32 = 10.0;
+const PARAM_SYNC_PER_SEC: f32 = 60.0;
 
 type WidgetMap = HashMap<WidgetId, Widget>;
 
@@ -590,7 +590,7 @@ impl SynthGui {
     ) {
         // TODO: Should we unconditionally render?
         if self.param_sync_poller.tick() {
-            self.parameters.refresh();
+            self.parameters.refresh_maybe();
             self.synchronize_params();
             self.render_sync();
         }
@@ -599,6 +599,14 @@ impl SynthGui {
         *control_flow = ControlFlow::WaitUntil(next_tick);
 
         match event {
+            Event::NewEvents(StartCause::Init) => {
+                *control_flow =
+                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
+            }
+            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+                *control_flow =
+                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
+            }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::ScaleFactorChanged {
                     scale_factor,
@@ -752,7 +760,7 @@ impl SynthGui {
     /// Returns true if any parameters need changing.
     fn synchronize_params(&mut self) -> bool {
         let mut any_changed = false;
-        if let Ok(guard) = self.subscriber.changes.lock() {
+        if let Ok(guard) = self.subscriber.changes.try_lock() {
             let changes = &(*guard);
             for (updated_eparam, updated_value) in changes {
                 any_changed = true;
