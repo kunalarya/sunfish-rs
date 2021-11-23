@@ -76,6 +76,7 @@ pub struct Widget {
     pub id: WidgetId,
     pub rect: Rect,
     pub value: f64, // Normalized between 0.0 and 1.0
+    pub baseline_value: Option<f64>,
     pub tentative_value: Option<f64>,
     pub wt: WidgetClass,
     pub interactive: bool,
@@ -95,6 +96,7 @@ impl Widget {
             id,
             rect,
             value,
+            baseline_value: None,
             tentative_value: None,
             wt,
             interactive,
@@ -116,17 +118,19 @@ impl Widget {
     }
 
     pub fn on_drag_start(&mut self, mouse_state: &ActiveMouseState, drag_factor: &f32) -> f64 {
+        self.baseline_value = Some(self.value);
         self.on_dragging(mouse_state, drag_factor)
     }
 
     pub fn on_dragging(&mut self, mouse_state: &ActiveMouseState, drag_factor: &f32) -> f64 {
+        let baseline_value = self.baseline_value.unwrap_or(self.value);
         let tentative_value = match &mut self.wt {
-            WidgetClass::Knob(knob) => knob.on_dragging(mouse_state, drag_factor, self.value),
+            WidgetClass::Knob(knob) => knob.on_dragging(mouse_state, drag_factor, baseline_value),
             WidgetClass::VSlider(vslider) => vslider.on_dragging(&self.rect, mouse_state),
             WidgetClass::Spinner(spinner) => {
-                spinner.on_dragging(mouse_state, drag_factor, self.value)
+                spinner.on_dragging(mouse_state, drag_factor, baseline_value)
             }
-            WidgetClass::Toggle(toggle) => toggle.on_dragging(self.value),
+            WidgetClass::Toggle(toggle) => toggle.on_dragging(baseline_value),
             WidgetClass::Panel(_) => 0.0,
         };
         self.tentative_value = Some(tentative_value);
@@ -134,10 +138,11 @@ impl Widget {
     }
 
     pub fn on_drag_done(&mut self) -> Option<f64> {
+        self.baseline_value = None;
         if let Some(new_value) = self.tentative_value {
             self.value = new_value;
             self.tentative_value = None;
-            return Some(new_value);
+            Some(new_value)
         } else {
             None
         }

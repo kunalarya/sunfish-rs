@@ -8,7 +8,7 @@ use wgpu;
 use wgpu_glyph::{ab_glyph, GlyphBrush, GlyphBrushBuilder, Section, Text};
 use wgpu_glyph::{HorizontalAlign, Layout, VerticalAlign};
 use winit::{
-    event::{ElementState, Event, MouseButton, WindowEvent},
+    event::{ElementState, Event, MouseButton, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
@@ -599,6 +599,14 @@ impl SynthGui {
         *control_flow = ControlFlow::WaitUntil(next_tick);
 
         match event {
+            Event::NewEvents(StartCause::Init) => {
+                *control_flow =
+                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
+            }
+            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+                *control_flow =
+                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
+            }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::ScaleFactorChanged {
                     scale_factor,
@@ -755,10 +763,6 @@ impl SynthGui {
         if let Ok(guard) = self.subscriber.changes.try_lock() {
             let changes = &(*guard);
             for (updated_eparam, updated_value) in changes {
-                // println!(
-                //     "synchronize_params; got {:?} = {:?}",
-                //     updated_eparam, updated_value
-                // );
                 any_changed = true;
                 let widget_id = WidgetId::Bound {
                     eparam: *updated_eparam,
