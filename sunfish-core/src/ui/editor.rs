@@ -1,5 +1,4 @@
 use std::os::raw::c_void;
-use std::sync::{Arc, Mutex};
 use vst::editor::{Editor, KeyCode, KnobMode};
 
 #[cfg(target_os = "macos")]
@@ -9,10 +8,7 @@ use winit::window::ChildWindow;
 #[cfg(target_os = "macos")]
 use winit::window::WindowBuilder;
 
-use crate::modulation;
-use crate::params;
-use crate::params::deltas;
-use crate::swarc;
+use crate::params::sync::{Subscriber, Synchronizer};
 use crate::ui::styling;
 use crate::ui::window;
 use crate::util::borrow_return::Owner;
@@ -25,46 +21,22 @@ pub struct SunfishEditor {
     #[cfg(target_os = "macos")]
     event_subscriber: Option<EventSubscriber>,
 
-    /// Core view of baseline parameters.
-    baseline_params: swarc::ArcReader<params::SunfishParams>,
-    /// Core view of modulated parameters.
-    modulated_params: swarc::ArcReader<params::SunfishParams>,
-
-    /// Owned GUI parameters; the core thread has a read-only
-    /// inconsistent view of these parameters.
-    gui_param_set: Owner<swarc::ArcWriter<modulation::ParamSet>>,
-
-    /// Shared mutable delta tracker, for updates from GUI.
-    from_gui_deltas: Arc<Mutex<deltas::Deltas>>,
-
-    /// Shared mutable delta tracker, for updates to GUI.
-    for_gui_deltas: Arc<Mutex<deltas::Deltas>>,
+    parameters: Owner<Synchronizer>,
+    subscriber: Owner<Subscriber>,
 
     /// Metadata/GUI layout.
     styling: styling::Styling,
 }
 
 impl SunfishEditor {
-    pub fn new(
-        // Views into core thread parameters.
-        baseline_params: swarc::ArcReader<params::SunfishParams>,
-        modulated_params: swarc::ArcReader<params::SunfishParams>,
-
-        // Owned GUI parameters.
-        gui_param_set: swarc::ArcWriter<modulation::ParamSet>,
-        from_gui_deltas: Arc<Mutex<deltas::Deltas>>,
-        for_gui_deltas: Arc<Mutex<deltas::Deltas>>,
-    ) -> SunfishEditor {
+    pub fn new(parameters: Synchronizer, subscriber: Subscriber) -> SunfishEditor {
         let styling = styling::load_default();
         SunfishEditor {
             open: false,
             #[cfg(target_os = "macos")]
             event_subscriber: None,
-            baseline_params,
-            modulated_params,
-            gui_param_set: Owner::new(gui_param_set),
-            from_gui_deltas,
-            for_gui_deltas,
+            parameters: Owner::new(parameters),
+            subscriber: Owner::new(subscriber),
             styling,
         }
     }
@@ -112,17 +84,11 @@ impl Editor for SunfishEditor {
                 ..
             } = child_window;
 
-            let baseline_params = swarc::ArcReader::clone(&self.baseline_params);
-            let modulated_params = swarc::ArcReader::clone(&self.modulated_params);
-
             if let Ok(mut synth_gui) = window::SynthGui::create(
                 &window,
                 &self.styling,
-                baseline_params,
-                modulated_params,
-                self.gui_param_set.borrow(),
-                Arc::clone(&self.from_gui_deltas),
-                Arc::clone(&self.for_gui_deltas),
+                self.parameters.borrow(),
+                self.subscriber.borrow(),
             ) {
                 event_subscriber.receive_events(move |event, _, control_flow| {
                     // The event subscriber callback owns the GUI. As soon as it

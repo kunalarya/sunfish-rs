@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync;
 use std::sync::atomic::AtomicU32;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use twox_hash::RandomXxHashBuilder64;
@@ -14,12 +13,8 @@ use winit::{
     window::Window,
 };
 
-use crate::modulation;
-use crate::params;
-use crate::params::deltas;
-use crate::params::NormalizedParams;
-use crate::params::SunfishParams;
-use crate::swarc;
+use crate::params::sync::{Subscriber, Synchronizer};
+use crate::params::{Params, ParamsMeta};
 use crate::ui::coords::{Coord2, UserVec2, Vec2};
 use crate::ui::shapes;
 use crate::ui::sprites;
@@ -101,7 +96,7 @@ struct State {
 
 impl State {
     pub async fn new(
-        meta: sync::Arc<params::SunfishParamsMeta>,
+        meta: sync::Arc<ParamsMeta>,
         window: &Window,
         styling: &styling::Styling,
     ) -> Self {
@@ -130,7 +125,7 @@ struct RenderState {
     swap_chain: wgpu::SwapChain,
     last_position: winit::dpi::PhysicalPosition<f64>,
     screen_metrics: shapes::ScreenMetrics,
-    aspect_ratio: f32,
+    _aspect_ratio: f32,
 
     background: [f64; 3],
     spritesheet: sprites::SpriteSheet,
@@ -288,7 +283,7 @@ impl RenderState {
             styling::Background::Sprite { .. } => [0.0, 0.0, 0.0],
         };
 
-        let aspect_ratio = screen_metrics.ratio;
+        let _aspect_ratio = screen_metrics.ratio;
         let inst = Self {
             surface,
             device,
@@ -297,7 +292,7 @@ impl RenderState {
             sc_desc,
             swap_chain,
             screen_metrics,
-            aspect_ratio,
+            _aspect_ratio,
             last_position: winit::dpi::PhysicalPosition::new(0.0, 0.0),
 
             background: background_color,
@@ -322,7 +317,7 @@ impl RenderState {
         &mut self,
         new_size: &winit::dpi::PhysicalSize<u32>,
         widgets: &mut WidgetMap,
-        params: &swarc::ArcReader<SunfishParams>,
+        params: &Synchronizer,
     ) {
         // Recreate the swap chain with the new size
         self.sc_desc.width = new_size.width;
@@ -345,11 +340,7 @@ impl RenderState {
         }
     }
 
-    fn update_widgets(
-        &mut self,
-        widgets: &mut WidgetMap,
-        params: &swarc::ArcReader<SunfishParams>,
-    ) {
+    fn update_widgets(&mut self, widgets: &mut WidgetMap, params: &Synchronizer) {
         // TODO: Update only specific widgets.
         for (_widget_id, widget) in widgets.iter_mut() {
             widget.update(
@@ -515,81 +506,25 @@ impl RenderState {
 /// Create testing GUI.
 async fn run(event_loop: EventLoop<()>, window: Window, styling: styling::Styling) {
     let sample_rate = 44100.0;
-    let params = SunfishParams::new(sample_rate);
-    let gui_params = params.clone();
 
-    let param_set = modulation::ParamSet::new("main".to_string(), params);
-    let gui_param_set = modulation::ParamSet::new("gui_param_set".to_string(), gui_params);
-    let (gui_param_set_writer, gui_param_set_reader) = swarc::new(gui_param_set);
-    let gui_param_reader = swarc::ArcReader::clone(&gui_param_set_reader.baseline);
+    // Create the parameters themselves.
+    let params = Params::new(sample_rate);
+    let meta = ParamsMeta::new();
 
-    let baseline_param_reader = swarc::ArcReader::clone(&param_set.baseline);
-    let modulated_param_reader = swarc::ArcReader::clone(&param_set.modulated);
-
-    let baseline_deltas = deltas::Deltas::new(&param_set.meta);
-    let from_gui_delta_tracker = baseline_deltas.create_tracker();
-    let from_gui_deltas = sync::Arc::new(Mutex::new(baseline_deltas));
-    let for_gui_deltas = sync::Arc::new(Mutex::new(deltas::Deltas::new(&param_set.meta)));
-
-    let mut gui_param_set = Owner::new(gui_param_set_writer);
+    let mut synchronizer = Synchronizer::new(meta, params);
+    let subscriber = synchronizer.subscriber();
+    let mut params_owner = Owner::new(synchronizer);
+    let mut subscriber_owner = Owner::new(subscriber);
 
     let mut sg = SynthGui::create(
         &window,
         &styling,
-        baseline_param_reader,
-        modulated_param_reader,
-        gui_param_set.borrow(),
-        sync::Arc::clone(&from_gui_deltas),
-        sync::Arc::clone(&for_gui_deltas),
+        params_owner.borrow(),
+        subscriber_owner.borrow(),
     )
     .expect("SynthGui: failed to create.");
 
-    async_std::task::spawn(async move {
-        update_gui_params(
-            param_set.meta.clone(),
-            sync::Arc::clone(&from_gui_deltas),
-            from_gui_delta_tracker,
-            gui_param_reader,
-            param_set.baseline_writer,
-        )
-        .await;
-    });
-
     event_loop.run(move |event, _, control_flow| sg.receive_events(&window, event, control_flow));
-}
-
-/// For testing standalone GUI.
-async fn update_gui_params(
-    meta: params::SunfishParamsMeta,
-    from_gui_deltas: sync::Arc<Mutex<deltas::Deltas>>,
-    mut from_gui_delta_tracker: deltas::DeltaChangeTracker,
-    params: swarc::ArcReader<params::SunfishParams>,
-    mut params_writer: swarc::ArcWriter<params::SunfishParams>,
-) {
-    loop {
-        // Grab the lock, check for updates.
-        let mut any_changed = false;
-
-        if let Ok(ref mut from_gui_deltas) = from_gui_deltas.try_lock() {
-            if from_gui_deltas.any_changed() {
-                // Update the cached changes.
-                from_gui_delta_tracker.refresh_changed(&meta, &from_gui_deltas);
-                from_gui_deltas.reset();
-                any_changed = true;
-            }
-        }
-        if any_changed {
-            // Now see which parameters changed and update them.
-            for changed in &from_gui_delta_tracker.changed_list_cached {
-                let param_value = params.get_param_normalized(&meta, *changed).unwrap();
-
-                params_writer
-                    .update_param(&meta, *changed, param_value)
-                    .unwrap();
-            }
-        }
-        async_std::task::sleep(std::time::Duration::from_millis(1)).await;
-    }
 }
 
 pub fn main() {
@@ -607,67 +542,41 @@ pub fn main() {
 
     async_std::task::block_on(run(event_loop, window, styling));
 }
+
 pub struct SynthGui {
     // GUI and rendering state.
     state: State,
+    parameters: Borrower<Synchronizer>,
+    subscriber: Borrower<Subscriber>,
 
-    // Views into the canonical params.
-    baseline_param_reader: swarc::ArcReader<SunfishParams>,
     #[allow(dead_code)]
-    modulated_param_reader: swarc::ArcReader<SunfishParams>,
-
-    // Owned GUI parameters.
-    gui_param_set: Borrower<swarc::ArcWriter<modulation::ParamSet>>,
-
-    // Channels for receiving and propagating parameter updates.
-    from_gui_deltas: sync::Arc<Mutex<deltas::Deltas>>,
-    from_gui_deltas_pending: deltas::Deltas,
-    from_gui_deltas_pending_tracker: deltas::DeltaChangeTracker,
-    for_gui_deltas: sync::Arc<Mutex<deltas::Deltas>>,
-    for_gui_deltas_tracker: deltas::DeltaChangeTracker,
-
-    meta: sync::Arc<params::SunfishParamsMeta>,
+    meta: sync::Arc<ParamsMeta>,
     param_sync_poller: Poller,
 
-    ignore_next_resized_event: bool,
+    _ignore_next_resized_event: bool,
 }
 
 impl SynthGui {
     pub fn create(
         window: &Window,
         styling: &styling::Styling,
-        baseline_param_reader: swarc::ArcReader<SunfishParams>,
-        modulated_param_reader: swarc::ArcReader<SunfishParams>,
-        gui_param_set: Borrower<swarc::ArcWriter<modulation::ParamSet>>,
-        from_gui_deltas: sync::Arc<Mutex<deltas::Deltas>>,
-        for_gui_deltas: sync::Arc<Mutex<deltas::Deltas>>,
+        parameters: Borrower<Synchronizer>,
+        subscriber: Borrower<Subscriber>,
     ) -> Result<SynthGui, std::io::Error> {
-        let meta = (gui_param_set.grabbed.as_ref().unwrap()).meta.clone();
-
-        let from_gui_deltas_pending = deltas::Deltas::new(&meta);
-        let from_gui_deltas_pending_tracker = from_gui_deltas_pending.create_tracker();
-
-        let for_gui_deltas_tracker = for_gui_deltas.lock().unwrap().create_tracker();
+        let meta = (parameters.grabbed.as_ref().unwrap()).meta.clone();
 
         let meta = sync::Arc::new(meta);
-        let state =
-            async_std::task::block_on(State::new(sync::Arc::clone(&meta), &window, styling));
+        let state = async_std::task::block_on(State::new(sync::Arc::clone(&meta), window, styling));
         let param_sync_duration = Duration::from_secs_f32(1.0 / PARAM_SYNC_PER_SEC);
         let mut synth_gui = SynthGui {
             state,
 
-            gui_param_set,
-            baseline_param_reader,
-            modulated_param_reader,
-            from_gui_deltas,
-            from_gui_deltas_pending,
-            from_gui_deltas_pending_tracker,
-            for_gui_deltas,
-            for_gui_deltas_tracker,
+            parameters,
+            subscriber,
             meta,
             param_sync_poller: Poller::new(param_sync_duration),
 
-            ignore_next_resized_event: false,
+            _ignore_next_resized_event: false,
         };
         synth_gui.synchronize_all_params();
         Ok(synth_gui)
@@ -681,10 +590,9 @@ impl SynthGui {
     ) {
         // TODO: Should we unconditionally render?
         if self.param_sync_poller.tick() {
-            let trigger_render = self.synchronize_params();
-            if trigger_render {
-                self.render_sync();
-            }
+            self.parameters.refresh();
+            self.synchronize_params();
+            self.render_sync();
         }
 
         let next_tick = Instant::now() + self.state.render_poller.duration;
@@ -700,7 +608,7 @@ impl SynthGui {
                     self.state.render_state.resize(
                         new_inner_size,
                         &mut self.state.widgets,
-                        &self.baseline_param_reader,
+                        &self.parameters,
                     );
                     window.request_redraw();
                 }
@@ -711,7 +619,7 @@ impl SynthGui {
                 WindowEvent::Resized(size) => {
                     // if !self.ignore_next_resized_event {
                     // Constrain the resize; TODO: how? look at the last window size?
-                    let (new_width, new_height) = (size.width, size.height);
+                    let (_new_width, _new_height) = (size.width, size.height);
                     //   self.state.render_state.screen_metrics.constrain_resize(
                     //       size.width,
                     //       size.height,
@@ -725,7 +633,7 @@ impl SynthGui {
                         &size,
                         //&override_size,
                         &mut self.state.widgets,
-                        &self.baseline_param_reader,
+                        &self.parameters,
                     );
                     window.request_redraw();
                     //self.ignore_next_resized_event = true;
@@ -738,41 +646,43 @@ impl SynthGui {
                     state: input_state,
                     button,
                     ..
-                } => match button {
-                    MouseButton::Left => match self.state.interactive_state {
-                        InteractiveState::Idle => {
-                            if input_state == ElementState::Pressed {
-                                let (x, y) = (self.state.mouse_pos.x, self.state.mouse_pos.y);
-                                for (widget_id, widget) in self.state.widgets.iter_mut() {
-                                    if widget.interactive && widget.in_bounds_rel(x, y) {
-                                        let mouse = ActiveMouseState {
-                                            pos: Coord2::new(x, y),
-                                            start: Coord2::new(x, y),
-                                        };
-                                        let drag_factor = DRAG_FACTOR_NORMAL;
-                                        widget.on_drag_start(&mouse, &drag_factor);
-                                        self.state.interactive_state = InteractiveState::Dragging {
-                                            id: *widget_id,
-                                            mouse,
-                                        };
-                                        break;
+                } => {
+                    if button == MouseButton::Left {
+                        match self.state.interactive_state {
+                            InteractiveState::Idle => {
+                                if input_state == ElementState::Pressed {
+                                    let (x, y) = (self.state.mouse_pos.x, self.state.mouse_pos.y);
+                                    for (widget_id, widget) in self.state.widgets.iter_mut() {
+                                        if widget.interactive && widget.in_bounds_rel(x, y) {
+                                            let mouse = ActiveMouseState {
+                                                pos: Coord2::new(x, y),
+                                                start: Coord2::new(x, y),
+                                            };
+                                            let drag_factor = DRAG_FACTOR_NORMAL;
+                                            widget.on_drag_start(&mouse, &drag_factor);
+                                            self.state.interactive_state =
+                                                InteractiveState::Dragging {
+                                                    id: *widget_id,
+                                                    mouse,
+                                                };
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
-                        InteractiveState::Dragging { id, .. } => {
-                            if let Some(widget) = self.state.widgets.get_mut(&id) {
-                                if let Some(new_value) = widget.on_drag_done() {
-                                    self.update_param(&id, new_value);
+                            InteractiveState::Dragging { id, .. } => {
+                                if let Some(widget) = self.state.widgets.get_mut(&id) {
+                                    if let Some(new_value) = widget.on_drag_done() {
+                                        self.update_param(&id, new_value);
+                                    }
+                                }
+                                if input_state == ElementState::Released {
+                                    self.state.interactive_state = InteractiveState::Idle;
                                 }
                             }
-                            if input_state == ElementState::Released {
-                                self.state.interactive_state = InteractiveState::Idle;
-                            }
                         }
-                    },
-                    _ => {}
-                },
+                    }
+                }
                 WindowEvent::CursorMoved { position, .. } => {
                     // Grab relative position.
                     let (x, y) = (
@@ -798,14 +708,14 @@ impl SynthGui {
                         } else {
                             DRAG_FACTOR_NORMAL
                         };
-                        if let Some(widget) = self.state.widgets.get_mut(&id) {
-                            let tentative_value = widget.on_dragging(&mouse, &df);
-                            let id = id.clone();
+                        if let Some(widget) = self.state.widgets.get_mut(id) {
+                            let tentative_value = widget.on_dragging(mouse, &df);
+                            let id = *id;
                             self.update_param(&id, tentative_value);
                         }
                         self.state
                             .render_state
-                            .update_widgets(&mut self.state.widgets, &self.baseline_param_reader);
+                            .update_widgets(&mut self.state.widgets, &self.parameters);
                     }
                     self.state.render_state.last_position = position;
                     window.request_redraw();
@@ -836,79 +746,36 @@ impl SynthGui {
 
     /// Load all baseline parameters.
     fn synchronize_all_params(&mut self) {
-        if let Ok(ref mut for_gui_deltas) = self.for_gui_deltas.try_lock() {
-            for_gui_deltas.set_all();
-            self.for_gui_deltas_tracker
-                .refresh_changed(&self.meta, &for_gui_deltas);
-        }
         self.synchronize_params();
     }
 
     /// Returns true if any parameters need changing.
     fn synchronize_params(&mut self) -> bool {
         let mut any_changed = false;
-        if let Ok(ref mut for_gui_deltas) = self.for_gui_deltas.try_lock() {
-            if for_gui_deltas.any_changed() {
-                self.for_gui_deltas_tracker
-                    .refresh_changed(&self.meta, &for_gui_deltas);
+        if let Ok(guard) = self.subscriber.changes.lock() {
+            let changes = &(*guard);
+            for (updated_eparam, updated_value) in changes {
                 any_changed = true;
-                for_gui_deltas.reset();
-            }
-        }
-        if any_changed {
-            for updated_eparam in &self.for_gui_deltas_tracker.changed_list_cached {
-                let val = self
-                    .baseline_param_reader
-                    .get_param_normalized(&self.meta, *updated_eparam)
-                    .unwrap_or(0.0);
-
                 let widget_id = WidgetId::Bound {
                     eparam: *updated_eparam,
                 };
-                self.state.widgets.get_mut(&widget_id).map(|widget| {
-                    widget.value = val;
-                });
+                if let Some(widget) = self.state.widgets.get_mut(&widget_id) {
+                    widget.value = *updated_value;
+                }
             }
-            self.state
-                .render_state
-                .update_widgets(&mut self.state.widgets, &self.baseline_param_reader);
+            if any_changed {
+                self.state
+                    .render_state
+                    .update_widgets(&mut self.state.widgets, &self.parameters);
+            }
         }
         any_changed
     }
-
     fn update_param(&mut self, id: &WidgetId, val: f64) {
         let eparam = match id {
             WidgetId::Unspecified { .. } => return,
             WidgetId::Bound { eparam } => *eparam,
         };
-        //  This should never fail; probably could streamline this.
-        if let Some(gui_param_set) = &mut self.gui_param_set.grabbed {
-            // First update the parameter.
-            gui_param_set
-                .baseline_writer
-                .update_param(&self.meta, eparam, val)
-                .unwrap();
-
-            // Then the bitmask, if we can.
-            // If we cannot acquire this lock, then store into
-            // pending changes.
-            // TODO: Factor out into helper?
-            if let Ok(ref mut from_gui_deltas) = self.from_gui_deltas.try_lock() {
-                if self.from_gui_deltas_pending.any_changed() {
-                    self.from_gui_deltas_pending_tracker
-                        .refresh_changed(&self.meta, &self.from_gui_deltas_pending);
-                    for updated_eparam in &self.from_gui_deltas_pending_tracker.changed_list_cached
-                    {
-                        from_gui_deltas.set_changed(&self.meta, &updated_eparam);
-                    }
-                    self.from_gui_deltas_pending.reset();
-                }
-                from_gui_deltas.set_changed(&self.meta, &eparam);
-            } else {
-                // store into pending
-                self.from_gui_deltas_pending
-                    .set_changed(&self.meta, &eparam);
-            }
-        }
+        self.parameters.write_parameter(eparam, val);
     }
 }

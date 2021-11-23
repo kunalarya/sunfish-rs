@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ron::de::from_str;
 use serde::Deserialize;
 
-use crate::params::SunfishParamsMeta;
+use crate::params::ParamsMeta;
 use crate::ui::coords::Rect;
 use crate::ui::shapes::{Color, Polarity};
 use crate::ui::widgets;
@@ -79,7 +79,7 @@ pub fn load_widgets_from_file(filename: &str) -> Styling {
     styling
 }
 
-pub fn create_widgets(def: &Styling, meta: Arc<SunfishParamsMeta>) -> Vec<widgets::Widget> {
+pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widget> {
     let mut widgets = vec![];
     let mut uniq_id = 0;
 

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::util;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct ADSR {
     pub attack: f64,
     pub decay: f64,
