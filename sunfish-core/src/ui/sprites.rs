@@ -70,6 +70,7 @@ pub struct Sprite {
     pub src_px: SpriteSource,
 }
 
+#[derive(Default)]
 pub struct SpriteUpdate {
     pub pos: Option<UserVec2>,
     pub size: Option<UserVec2>,
@@ -308,6 +309,7 @@ impl BoundSpriteSheet {
         );
     }
 }
+
 pub fn render<'a>(
     bound_spritesheet: &'a BoundSpriteSheet,
     mut rpass: wgpu::RenderPass<'a>,
