@@ -35,7 +35,7 @@ impl SpriteVertex {
         // TODO: let y = screen_metrics.norm_y_to_corrected(y);
         SpriteVertex {
             position: [x, y, 0.0],
-            tex_coords: self.tex_coords.clone(),
+            tex_coords: self.tex_coords,
         }
     }
 
@@ -89,7 +89,7 @@ impl SpriteSheet {
         let texture_bytes = std::fs::read(filename).unwrap();
         println!("Loading spritesheet...");
         let texture =
-            texture::Texture::from_bytes(&device, &queue, &texture_bytes, filename).unwrap();
+            texture::Texture::from_bytes(device, queue, &texture_bytes, filename).unwrap();
         //let _ = texture::Texture::from_png(&device, &queue, &filename, &filename);
         SpriteSheet {
             sprites: vec![],
@@ -139,7 +139,7 @@ impl BoundSpriteSheet {
         let mut indices = vec![0; 6 * sheet.sprites.len()];
 
         let buffers =
-            Self::create_buffers(device, &mut vertices, &mut indices, &sheet, screen_metrics);
+            Self::create_buffers(device, &mut vertices, &mut indices, sheet, screen_metrics);
 
         println!("Creating sprite bind groups...");
         let sprite_bind_group_layout =
@@ -291,7 +291,7 @@ impl BoundSpriteSheet {
             indices[ii..ii + 6].copy_from_slice(&sprite_indices);
             i += 4;
         }
-        buffers::VertexBuffers::new(device, &vertices, &indices)
+        buffers::VertexBuffers::new(device, vertices, indices)
     }
 
     pub fn update(
@@ -304,7 +304,7 @@ impl BoundSpriteSheet {
             device,
             &mut self.vertices,
             &mut self.indices,
-            &sheet,
+            sheet,
             screen_metrics,
         );
     }

@@ -241,7 +241,7 @@ impl Interpolator {
         &mut self,
         shape: WaveShape,
         freq: f64,
-        mut output_buf: &mut [f64],
+        output_buf: &mut [f64],
         output_count: usize,
         cache: &mut CachedWaveform,
         unison: Unison,
@@ -291,7 +291,7 @@ impl Interpolator {
                 cache.ref_waveform_len, // input_len_f
                 cache.last_phase,       // input_phase
                 cache.f_samples,        // target_samples
-                &mut output_buf,        // output_buf
+                output_buf,             // output_buf
                 output_count,           // output_count
             );
             (phase, 0.0)
@@ -303,7 +303,7 @@ impl Interpolator {
                 cache.last_phase2,      // input_phase2
                 cache.f_samples,        // target_samples
                 cache.f_samples2,       // target_samples2
-                &mut output_buf,        // output_buf
+                output_buf,             // output_buf
                 output_count,           // output_count
             );
             (phase, phase2)

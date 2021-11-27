@@ -95,6 +95,7 @@ pub fn interpolate_linear_inplace(
 
 /// Unison, 2-voice linear interpolation.
 /// TODO: Merge with above.
+#[allow(clippy::too_many_arguments)]
 pub fn interpolate_linear_inplace2(
     reference: &[f64],
     ref_len_f: f64,

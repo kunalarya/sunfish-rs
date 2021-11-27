@@ -161,7 +161,7 @@ impl Env {
     }
 
     pub fn update_adsr(&mut self, adsr: &ADSR) {
-        self.adsr = adsr.clone();
+        self.adsr = *adsr;
         // Re-enter the stage; the level stays as is, so we should be okay.
         self.enter_stage(self.stage.clone());
     }
