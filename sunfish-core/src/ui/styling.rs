@@ -50,6 +50,7 @@ pub enum Element {
         widget_id: widgets::WidgetId,
         rect: Rect,
         label: Option<widgets::Text>,
+        sprite: Option<widgets::ToggleSprite>,
     },
     Panel {
         rect: Rect,
@@ -143,6 +144,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 widget_id,
                 rect,
                 label,
+                sprite,
             } => {
                 widgets.push(widgets::Toggle::new_widget(
                     Arc::clone(&meta),
@@ -150,6 +152,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                     rect.clone(),
                     0.0,
                     label.clone(),
+                    sprite.clone(),
                 ));
             }
             Element::VSlider { widget_id, rect } => {

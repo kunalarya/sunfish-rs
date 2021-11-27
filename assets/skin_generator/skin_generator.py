@@ -1,6 +1,6 @@
 # Helper to auto-generate the GUI RON file.
 
-from typing import Optional, Union, TextIO, Tuple
+from typing import Union, TextIO, Tuple
 
 import attr
 
@@ -44,12 +44,15 @@ BACKGROUND_COLOR = (float(c) / 256.0 for c in BACKGROUND_UNSCALED)
 Padding = Union[float, Tuple[float, float]]
 
 
+NumLike = Union[float, int]
+
+
 @attr.frozen
 class Rect:
-    x1: int
-    y1: int
-    x2: int
-    y2: int
+    x1: NumLike
+    y1: NumLike
+    x2: NumLike
+    y2: NumLike
 
     def to_str(self) -> str:
         return (
@@ -65,7 +68,9 @@ class Rect:
         return f"Rect(pos: ({nx1:.6f}, {ny1:.6f}, {nx2:.6f}, {ny2:.6f}))"
 
     @classmethod
-    def from_offset(cls, x: int, y: int, width: int, height: int) -> "Rect":
+    def from_offset(
+        cls, x: NumLike, y: NumLike, width: NumLike, height: NumLike
+    ) -> "Rect":
         return Rect(x, y, x + width, y + height)
 
 
@@ -81,6 +86,12 @@ def create_osc_panel(screen: ScreenMetrics, out: TextIO, osc: int) -> None:
     unison_voices_rect = Rect.from_offset(x_offset + 529, 141, 86, 27)
     unison_amt_rect = Rect.from_offset(x_offset + 637, 138, 38, 38)
 
+    if osc == 1:
+        toggle_sprite_on = Rect.from_offset(0, 997.5, 42.5, 29.5)
+    else:
+        toggle_sprite_on = Rect.from_offset(43, 997.5, 42.5, 29.5)
+    toggle_sprite_off = Rect.from_offset(x_offset + 50, 35, 43, 31)
+
     def emit(rect: Rect) -> str:
         return rect.normalized(screen)
 
@@ -92,6 +103,7 @@ def create_osc_panel(screen: ScreenMetrics, out: TextIO, osc: int) -> None:
             widget_id: Bound(eparam: Osc{osc}(Enable)),
             rect: {emit(on_off_rect)},
             label: None,
+            sprite: Some(ToggleSprite(on: {toggle_sprite_on.to_str()}, off: {toggle_sprite_off.to_str()}))
         ),
         Spinner(  // Shape
             widget_id: Bound(eparam: Osc{osc}(Shape)),
@@ -168,6 +180,12 @@ def create_filt_panel(screen: ScreenMetrics, out: TextIO, filt: int) -> None:
     res_rect = Rect.from_offset(x_offset + 628, 484, 59, 59)
     env_rect = Rect.from_offset(x_offset + 590, 593, 39, 39)
 
+    if filt == 1:
+        toggle_sprite_on = Rect.from_offset(86, 997.5, 42.5, 29.5)
+    else:
+        toggle_sprite_on = Rect.from_offset(129, 997.5, 42.5, 29.5)
+    toggle_sprite_off = Rect.from_offset(x_offset + 50, 423, 43, 31)
+
     def emit(rect: Rect) -> str:
         return rect.normalized(screen)
 
@@ -178,6 +196,7 @@ def create_filt_panel(screen: ScreenMetrics, out: TextIO, filt: int) -> None:
             widget_id: Bound(eparam: Filt{filt}(Enable)),
             rect: {emit(on_off_rect)},
             label: None,
+            sprite: Some(ToggleSprite(on: {toggle_sprite_on.to_str()}, off: {toggle_sprite_off.to_str()}))
         ),
         Spinner(
             widget_id: Bound(eparam: Filt{filt}(Mode)),

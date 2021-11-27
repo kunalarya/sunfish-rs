@@ -10,6 +10,7 @@ background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)
             widget_id: Bound(eparam: Osc1(Enable)),
             rect: Rect(pos: (0.033333, 0.023333, 0.062000, 0.044000)),
             label: None,
+            sprite: Some(ToggleSprite(on: Rect(pos: (0.000000, 997.500000, 42.500000, 1027.000000)), off: Rect(pos: (50.000000, 35.000000, 93.000000, 66.000000))))
         ),
         Spinner(  // Shape
             widget_id: Bound(eparam: Osc1(Shape)),
@@ -80,6 +81,7 @@ background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)
             widget_id: Bound(eparam: Osc2(Enable)),
             rect: Rect(pos: (0.526667, 0.023333, 0.555333, 0.044000)),
             label: None,
+            sprite: Some(ToggleSprite(on: Rect(pos: (43.000000, 997.500000, 85.500000, 1027.000000)), off: Rect(pos: (790.000000, 35.000000, 833.000000, 66.000000))))
         ),
         Spinner(  // Shape
             widget_id: Bound(eparam: Osc2(Shape)),
@@ -150,6 +152,7 @@ background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)
             widget_id: Bound(eparam: Filt1(Enable)),
             rect: Rect(pos: (0.033333, 0.282000, 0.062000, 0.302667)),
             label: None,
+            sprite: Some(ToggleSprite(on: Rect(pos: (86.000000, 997.500000, 128.500000, 1027.000000)), off: Rect(pos: (50.000000, 423.000000, 93.000000, 454.000000))))
         ),
         Spinner(
             widget_id: Bound(eparam: Filt1(Mode)),
@@ -191,6 +194,7 @@ background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)
             widget_id: Bound(eparam: Filt2(Enable)),
             rect: Rect(pos: (0.526667, 0.282000, 0.555333, 0.302667)),
             label: None,
+            sprite: Some(ToggleSprite(on: Rect(pos: (129.000000, 997.500000, 171.500000, 1027.000000)), off: Rect(pos: (790.000000, 423.000000, 833.000000, 454.000000))))
         ),
         Spinner(
             widget_id: Bound(eparam: Filt2(Mode)),

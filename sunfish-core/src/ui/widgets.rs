@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::params::sync::Synchronizer;
 use crate::params::{EParam, ParamsMeta};
 use crate::ui::alignment::{HorizontalAlign, VerticalAlign};
-use crate::ui::coords::{Coord2, Rect};
+use crate::ui::coords::{Coord2, Rect, UserVec2, Vec2};
 use crate::ui::shapes;
 use crate::ui::shapes::{Color, Polarity};
 use crate::ui::sprites;
@@ -168,7 +168,7 @@ impl Widget {
                 panel.initialize(&self.rect, screen_metrics, spritesheet, shapes)
             }
             WidgetClass::Toggle(toggle) => {
-                toggle.initialize(&self.rect, screen_metrics, self.value, shapes)
+                toggle.initialize(&self.rect, screen_metrics, self.value, spritesheet, shapes)
             }
         };
     }
@@ -782,14 +782,24 @@ pub struct Toggle {
     _outline_index: ShapeIndex,
     thumb_index: ShapeIndex,
     label: Option<Text>,
+    sprite_info: Option<ToggleSprite>,
+    sprite_index: Option<SpriteIndex>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ToggleSprite {
+    on: Rect,
+    off: Rect,
 }
 
 impl Toggle {
-    pub fn new(label: Option<Text>) -> Self {
+    pub fn new(label: Option<Text>, sprite_info: Option<ToggleSprite>) -> Self {
         Toggle {
             _outline_index: ShapeIndex(0),
             thumb_index: ShapeIndex(0),
             label,
+            sprite_info,
+            sprite_index: None,
         }
     }
 
@@ -799,8 +809,9 @@ impl Toggle {
         rect: Rect,
         value: f64,
         label: Option<Text>,
+        sprite_info: Option<ToggleSprite>,
     ) -> Widget {
-        let toggle = Self::new(label);
+        let toggle = Self::new(label, sprite_info);
         Widget::new(meta, id, rect, value, WidgetClass::Toggle(toggle))
     }
 
@@ -809,31 +820,44 @@ impl Toggle {
         rect: &Rect,
         screen_metrics: &shapes::ScreenMetrics,
         value: f64,
+        spritesheet: &mut sprites::SpriteSheet,
         shapes: &mut shapes::Shapes,
     ) {
-        // let buffers = Self::create_outline(rect, screen_metrics);
-        // let max_v_count = buffers.vertices.len();
-        // let max_i_count = buffers.indices.len();
-        // let outline_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
-
         // TODO: Value computation
-        let buffers = Self::create_thumb(rect, screen_metrics, value);
-        let max_v_count = buffers.vertices.len();
-        let max_i_count = buffers.indices.len();
-        let thumb_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+        let value = Self::value_to_bool(value);
 
-        //self.outline_index = ShapeIndex(outline_index);
-        self.thumb_index = ShapeIndex(thumb_index);
+        if let Some(sprite_info) = &self.sprite_info {
+            self.sprite_index = Some(SpriteIndex(spritesheet.add(sprites::Sprite {
+                pos: UserVec2::Rel(Vec2 {
+                    pos: [rect.pos[0], rect.pos[1]],
+                }),
+                size: UserVec2::Rel(Vec2 { pos: rect.size() }),
+                src_px: sprites::SpriteSource {
+                    src_rect: sprite_info.on.pos,
+                },
+            })));
+        } else {
+            let buffers = Self::create_toggle(rect, screen_metrics, value);
+            let max_v_count = buffers.vertices.len();
+            let max_i_count = buffers.indices.len();
+            let thumb_index =
+                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+            self.thumb_index = ShapeIndex(thumb_index);
+        }
     }
 
-    fn create_thumb(
+    fn create_toggle(
         rect: &Rect,
         screen_metrics: &shapes::ScreenMetrics,
-        value: f64,
+        value: bool,
     ) -> shapes::Buffers {
         let contracted = rect.contract(0.01);
-        let r = if value >= 0.5 { rect } else { &contracted };
+        let r = if value { rect } else { &contracted };
         shapes::rectangle_solid(r, screen_metrics)
+    }
+
+    fn value_to_bool(value: f64) -> bool {
+        value >= 0.5
     }
 
     fn _create_outline(rect: &Rect, screen_metrics: &shapes::ScreenMetrics) -> shapes::Buffers {
@@ -849,20 +873,38 @@ impl Toggle {
     }
 
     fn update(&mut self, ctx: &mut UpdateContext, value: f64) {
-        //let buffers = Self::create_outline(ctx.rect, ctx.screen_metrics);
-        //ctx.shapes.update(self.outline_index.0, &buffers.vertices, &buffers.indices);
-        let buffers = Self::create_thumb(ctx.rect, ctx.screen_metrics, value);
-        ctx.shapes
-            .update(self.thumb_index.0, &buffers.vertices, &buffers.indices);
+        let value = Self::value_to_bool(value);
+        //println!("Toggle::update({:?})", self.sprite_info);
+        if let Some(sprite_info) = &self.sprite_info {
+            ctx.spritesheet.update_sprite(
+                self.sprite_index.unwrap().0,
+                &sprites::SpriteUpdate {
+                    src_px: Some(sprites::SpriteSource {
+                        src_rect: if value {
+                            sprite_info.on.pos
+                        } else {
+                            sprite_info.off.pos
+                        },
+                    }),
+                    ..Default::default()
+                },
+            );
+        } else {
+            let buffers = Self::create_toggle(ctx.rect, ctx.screen_metrics, value);
+            ctx.shapes
+                .update(self.thumb_index.0, &buffers.vertices, &buffers.indices);
+        }
     }
 
     fn on_resize(&mut self, ctx: &mut UpdateContext, value: f64) {
-        // let buffers = Self::create_outline(ctx.rect, ctx.screen_metrics);
-        // ctx.shapes
-        //     .update(self.outline_index.0, &buffers.vertices, &buffers.indices);
-        let buffers = Self::create_thumb(ctx.rect, ctx.screen_metrics, value);
-        ctx.shapes
-            .update(self.thumb_index.0, &buffers.vertices, &buffers.indices);
+        if let Some(_sprite_info) = &self.sprite_info {
+            // TODO?
+        } else {
+            let value = Self::value_to_bool(value);
+            let buffers = Self::create_toggle(ctx.rect, ctx.screen_metrics, value);
+            ctx.shapes
+                .update(self.thumb_index.0, &buffers.vertices, &buffers.indices);
+        }
     }
 
     pub fn apply_to_texts<F: FnMut(&Text, &Color)>(&self, mut f: F) {
