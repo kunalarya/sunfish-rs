@@ -252,14 +252,14 @@ impl Shape {
         }
     }
 
-    fn update(&mut self, vertices: &Vec<ShapeVertex>, indices: &Vec<u16>) {
+    fn update(&mut self, vertices: &[ShapeVertex], indices: &[u16]) {
         // TODO: Copy the slices in place.
         let vertices = if vertices.len() > self.max_v_count {
             // TODO: Should we just truncate and log?
             log::warn!("Shape::update received vertex buffer larger than max_v_count");
             &vertices[..self.max_v_count]
         } else {
-            &vertices[..]
+            vertices
         };
 
         let indices = if indices.len() > self.max_i_count {
@@ -267,7 +267,7 @@ impl Shape {
             log::warn!("Shape::update received index buffer larger than max_i_count");
             &indices[..self.max_i_count]
         } else {
-            &indices[..]
+            indices
         };
 
         // Replace them in-memory.
@@ -300,11 +300,11 @@ impl Shapes {
         index
     }
 
-    pub fn update(&mut self, index: usize, vertices: &Vec<ShapeVertex>, indices: &Vec<u16>) {
+    pub fn update(&mut self, index: usize, vertices: &[ShapeVertex], indices: &[u16]) {
         self.shapes_to_update.insert(index);
-        self.shapes
-            .get_mut(index)
-            .map(|shape| shape.update(vertices, indices));
+        if let Some(shape) = self.shapes.get_mut(index) {
+            shape.update(vertices, indices)
+        }
     }
 }
 
@@ -327,7 +327,7 @@ impl BoundShapes {
         shapes: &Shapes,
     ) -> Self {
         let (ver_ranges, ind_ranges, ver_buf, ind_buf) = Self::pack_shapes(shapes);
-        let buffers = buffers::VertexBuffers::new(&device, &ver_buf, &ind_buf);
+        let buffers = buffers::VertexBuffers::new(device, &ver_buf, &ind_buf);
 
         let shape_vs_module =
             device.create_shader_module(wgpu::include_spirv!("shader_shape.vert.spv"));
@@ -471,7 +471,7 @@ pub fn render<'a>(
     rpass.set_index_buffer(bound_shapes.buffers.indices.buf.slice(..));
 
     for range in &bound_shapes.ind_ranges.0 {
-        if range.len() > 0 {
+        if !range.is_empty() {
             rpass.draw_indexed(range.clone(), 0, 0..1);
         }
     }
@@ -699,7 +699,7 @@ pub fn rectangle_outline(
     let mut vertex_builder = BuffersBuilder::new(
         &mut buffers,
         ShapeVertexBuilder {
-            color: color.clone(),
+            color: *color,
             screen_metrics,
         },
     );
@@ -765,7 +765,7 @@ pub fn line_segment(
     let mut vertex_builder = BuffersBuilder::new(
         &mut buffers,
         ShapeVertexBuilder {
-            color: color.clone(),
+            color: *color,
             screen_metrics,
         },
     );

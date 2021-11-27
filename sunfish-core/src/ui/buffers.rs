@@ -54,12 +54,12 @@ pub struct VertexBuffers<T: Pod> {
 impl<T: Pod> VertexBuffers<T> {
     pub fn new(device: &wgpu::Device, init_vertices: &[T], init_indices: &[u16]) -> Self {
         let mut vertices: Buffer<T> = Buffer::new(
-            &device,
+            device,
             init_vertices.len(),
             wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
         );
         let mut indices: Buffer<u16> = Buffer::new(
-            &device,
+            device,
             init_indices.len(),
             wgpu::BufferUsage::INDEX | wgpu::BufferUsage::COPY_DST,
         );

@@ -542,7 +542,7 @@ impl Sunfish {
                 }
 
                 let mut channel_idx_float = 0.0;
-                for (channel_idx, mut output_channel) in outputs.iter_mut().enumerate() {
+                for (channel_idx, output_channel) in outputs.iter_mut().enumerate() {
                     let stereo_width = channel_idx_float * self.params_modulated.osc1.stereo_width;
                     if osc1_enabled {
                         // Oscillator 1
@@ -562,7 +562,7 @@ impl Sunfish {
                             &mut voice.mod_state,
                             self.params_modulated.filt1.cutoff_semi,
                             self.params_modulated.filt1.env_amt,
-                            &mut output_channel,
+                            output_channel,
                             stereo_width,
                             &self.params_modulated.osc1.shape,
                             &self.params_modulated.osc1.unison,
@@ -589,7 +589,7 @@ impl Sunfish {
                             &mut voice.mod_state,
                             self.params_modulated.filt2.cutoff_semi,
                             self.params_modulated.filt2.env_amt,
-                            &mut output_channel,
+                            output_channel,
                             stereo_width,
                             &self.params_modulated.osc2.shape,
                             &self.params_modulated.osc2.unison,

@@ -98,7 +98,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
             } => {
                 widgets.push(widgets::Knob::new_widget(
                     Arc::clone(&meta),
-                    widget_id.clone(),
+                    *widget_id,
                     rect.clone(),
                     polarity.clone().unwrap_or(Polarity::Unipolar),
                     0.0,
@@ -132,7 +132,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
             } => {
                 widgets.push(widgets::Spinner::new_widget(
                     Arc::clone(&meta),
-                    widget_id.clone(),
+                    *widget_id,
                     rect.clone(),
                     0.0,
                     label.clone(),
@@ -148,7 +148,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
             } => {
                 widgets.push(widgets::Toggle::new_widget(
                     Arc::clone(&meta),
-                    widget_id.clone(),
+                    *widget_id,
                     rect.clone(),
                     0.0,
                     label.clone(),
@@ -158,7 +158,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
             Element::VSlider { widget_id, rect } => {
                 widgets.push(widgets::VSlider::new_widget(
                     Arc::clone(&meta),
-                    widget_id.clone(),
+                    *widget_id,
                     rect.clone(),
                     0.0,
                 ));
