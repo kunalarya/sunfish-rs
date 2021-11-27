@@ -1,6 +1,4 @@
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::VecDeque;
 
 use num_traits::Float;
 
@@ -53,55 +51,78 @@ pub struct Voice {
 
     cached_waveforms_osc1: Vec<CachedWaveform>,
     cached_waveforms_osc2: Vec<CachedWaveform>,
+
+    note_released: bool,
+}
+
+struct VoiceInfo<'a> {
+    sample_rate: f64,
+    note: u8,
+    velocity: i8,
+    osc1_fine_offset: f64,
+    osc1_semitones_offset: i32,
+    osc1_octave_offset: i32,
+    osc2_fine_offset: f64,
+    osc2_semitones_offset: i32,
+    osc2_octave_offset: i32,
+    amp_adsr: env::ADSR,
+    mod_adsr: env::ADSR,
+    params: &'a Params,
+    meta: &'a ParamsMeta,
 }
 
 impl Voice {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        sample_rate: f64,
-        note: u8,
-        velocity: i8,
-        osc1_fine_offset: f64,
-        osc1_semitones_offset: i32,
-        osc1_octave_offset: i32,
-        osc2_fine_offset: f64,
-        osc2_semitones_offset: i32,
-        osc2_octave_offset: i32,
-        amp_adsr: env::ADSR,
-        mod_adsr: env::ADSR,
-        params: &Params,
-        meta: &ParamsMeta,
+        info: &VoiceInfo, // sample_rate: f64,
+                          // note: u8,
+                          // velocity: i8,
+                          // osc1_fine_offset: f64,
+                          // osc1_semitones_offset: i32,
+                          // osc1_octave_offset: i32,
+                          // osc2_fine_offset: f64,
+                          // osc2_semitones_offset: i32,
+                          // osc2_octave_offset: i32,
+                          // amp_adsr: env::ADSR,
+                          // mod_adsr: env::ADSR,
+                          // params: &Params,
+                          // meta: &ParamsMeta
     ) -> Voice {
         let mut filter1: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT);
         let mut filter2: Vec<Filter> = Vec::with_capacity(CHANNEL_COUNT);
         for _channel_idx in 0..CHANNEL_COUNT {
             filter1.push(Filter::new(
-                sample_rate,
-                &params.filt1.mode,
-                &params.filt1.cutoff_semi,
-                &params.filt1.resonance,
+                info.sample_rate,
+                &info.params.filt1.mode,
+                &info.params.filt1.cutoff_semi,
+                &info.params.filt1.resonance,
             ));
             filter2.push(Filter::new(
-                sample_rate,
-                &params.filt2.mode,
-                &params.filt2.cutoff_semi,
-                &params.filt2.resonance,
+                info.sample_rate,
+                &info.params.filt2.mode,
+                &info.params.filt2.cutoff_semi,
+                &info.params.filt2.resonance,
             ));
         }
-        let mut amp_envelope = env::Env::new(amp_adsr, sample_rate);
+        let mut amp_envelope = env::Env::new(info.amp_adsr, info.sample_rate);
         amp_envelope.start();
-        let mut mod_envelope = env::Env::new(mod_adsr, sample_rate);
+        let mut mod_envelope = env::Env::new(info.mod_adsr, info.sample_rate);
         mod_envelope.start();
 
         // TODO: If note isn't valid, set velocity to 0.
         let cached_waveforms_osc1 = vec![CachedWaveform::zero(); CHANNEL_COUNT];
         let cached_waveforms_osc2 = vec![CachedWaveform::zero(); CHANNEL_COUNT];
 
-        let mut mod_state = ModState::new(sample_rate, 1);
-        modulation::update_mod_range(&mut mod_state, meta, 0, ModulationTarget::Filter1Cutoff);
+        let mut mod_state = ModState::new(info.sample_rate, 1);
+        modulation::update_mod_range(
+            &mut mod_state,
+            info.meta,
+            0,
+            ModulationTarget::Filter1Cutoff,
+        );
 
         let mut inst = Voice {
-            base_note: note,
+            base_note: info.note,
             freq_osc1: 0.0,
             freq_osc2: 0.0,
 
@@ -109,15 +130,15 @@ impl Voice {
             pitch_bend: 0.0,
             pitch_bend_range: 1.0,
 
-            osc1_fine_offset,
-            osc1_semitones_offset,
-            osc1_octave_offset,
+            osc1_fine_offset: info.osc1_fine_offset,
+            osc1_semitones_offset: info.osc1_semitones_offset,
+            osc1_octave_offset: info.osc1_octave_offset,
 
-            osc2_fine_offset,
-            osc2_semitones_offset,
-            osc2_octave_offset,
+            osc2_fine_offset: info.osc2_fine_offset,
+            osc2_semitones_offset: info.osc2_semitones_offset,
+            osc2_octave_offset: info.osc2_octave_offset,
 
-            velocity,
+            velocity: info.velocity,
             filter1,
             filter2,
             amp_envelope,
@@ -126,6 +147,8 @@ impl Voice {
 
             cached_waveforms_osc1,
             cached_waveforms_osc2,
+
+            note_released: false,
         };
         inst.update_osc1_freq();
         inst.update_osc2_freq();
@@ -170,6 +193,19 @@ impl Voice {
         // TODO: Pitch bending.
         freq + fine_offset
     }
+
+    fn release(&mut self) {
+        if self.note_released {
+            return;
+        }
+        self.note_released = true;
+        self.amp_envelope.release();
+    }
+
+    fn idle(&self) -> bool {
+        // TODO: Do we need to factor in note_released?
+        self.amp_envelope.is_idle()
+    }
 }
 
 pub struct Tempo {
@@ -200,12 +236,15 @@ impl Tempo {
     }
 }
 
-// TODO: Replace HashMap with a deque.
-pub type Voices = HashMap<u8, Vec<Voice>>;
+pub type Voices = VecDeque<Voice>;
 
 pub struct Sunfish {
-    // Added a counter in our plugin struct.
     pub voices: Voices,
+    /// Number of active voices producing sound. Note that this number is likely to be greater than
+    /// the length of the Voices VecDeque, as we allow notes to complete their release envelopes.
+    pub active_voices: usize,
+    pub max_active_voices: usize,
+
     pub dt: f64,
     pub interpolator: Interpolator,
 
@@ -225,10 +264,6 @@ pub struct Sunfish {
     buf: Vec<f64>,
     // Preallocated amp & filter envelope.
     amp_filt_env_buf: Vec<(f64, f64)>,
-
-    voice_count: usize,
-    ignored_notes: HashSet<u8>,
-    voices_to_drop_indices: Vec<usize>,
 }
 
 impl Sunfish {
@@ -250,8 +285,9 @@ impl Sunfish {
         let params_modulated = params.clone();
 
         Sunfish {
-            voices: HashMap::new(),
-            ignored_notes: HashSet::with_capacity(VOICES_MAX),
+            voices: VecDeque::with_capacity(VOICES_MAX),
+            active_voices: 0,
+            max_active_voices: 64,
 
             dt,
             interpolator: Interpolator::new(sample_rate),
@@ -269,15 +305,11 @@ impl Sunfish {
             modulation,
             buf: Vec::with_capacity(1024),
             amp_filt_env_buf: Vec::with_capacity(1024),
-
-            voice_count: 0,
-            voices_to_drop_indices: Vec::with_capacity(32),
         }
     }
 
     pub fn update_sample_rate(&mut self, sample_rate: f64) {
         self.voices.clear();
-        self.ignored_notes.clear();
 
         // TODO update GUI sample rate
 
@@ -287,47 +319,41 @@ impl Sunfish {
     }
 
     pub fn note_on(&mut self, note: u8, velocity: i8) {
-        if self.voice_count > VOICES_MAX {
-            self.ignored_notes.insert(note);
+        if self.active_voices > self.max_active_voices {
             return;
         }
 
-        let voice = Voice::new(
-            self.params.sample_rate,
+        // If there's an active, unreleased note, release it now.
+        for voice in self.voices.iter_mut().filter(|v| !v.note_released) {
+            if voice.base_note == note {
+                voice.release();
+            }
+        }
+
+        let voice = Voice::new(&VoiceInfo {
+            sample_rate: self.params.sample_rate,
             note,
             velocity,
-            self.params_modulated.osc1.fine_offset,
-            self.params_modulated.osc1.semitones_offset,
-            self.params_modulated.osc1.octave_offset,
-            self.params_modulated.osc2.fine_offset,
-            self.params_modulated.osc2.semitones_offset,
-            self.params_modulated.osc2.octave_offset,
-            self.params_modulated.amp_env,
-            self.params_modulated.mod_env,
-            &self.params_modulated,
-            &self.meta,
-        );
-        match self.voices.entry(note) {
-            Vacant(entry) => {
-                let mut v = Vec::with_capacity(32);
-                v.push(voice);
-                entry.insert(v);
-            }
-            Occupied(mut entry) => {
-                let v = entry.get_mut();
-                v.push(voice);
-            }
-        };
+            osc1_fine_offset: self.params_modulated.osc1.fine_offset,
+            osc1_semitones_offset: self.params_modulated.osc1.semitones_offset,
+            osc1_octave_offset: self.params_modulated.osc1.octave_offset,
+            osc2_fine_offset: self.params_modulated.osc2.fine_offset,
+            osc2_semitones_offset: self.params_modulated.osc2.semitones_offset,
+            osc2_octave_offset: self.params_modulated.osc2.octave_offset,
+            amp_adsr: self.params_modulated.amp_env,
+            mod_adsr: self.params_modulated.mod_env,
+            params: &self.params_modulated,
+            meta: &self.meta,
+        });
+
+        self.voices.push_back(voice);
+        self.active_voices += 1;
     }
 
     pub fn note_off(&mut self, note: u8) {
-        if self.ignored_notes.contains(&note) {
-            self.ignored_notes.remove(&note);
-            return;
-        }
-        if let Some(voices) = self.voices.get_mut(&note) {
-            for voice in voices.iter_mut() {
-                voice.amp_envelope.release();
+        for voice in self.voices.iter_mut().filter(|v| !v.note_released) {
+            if voice.base_note == note {
+                voice.release();
             }
         }
     }
@@ -362,7 +388,7 @@ impl Sunfish {
         // mod parameters. If it is being modulated, the modulation tick
         // will handle it.
         if !modulation.mod_state.modulated_params.contains(&param) {
-            let _ = params_modulated.write_parameter(meta, param, param_value);
+            params_modulated.write_parameter(meta, param, param_value);
         }
     }
 
@@ -374,93 +400,73 @@ impl Sunfish {
             EParam::Osc1(EOscParams::SemitonesOffset)
             | EParam::Osc1(EOscParams::OctaveOffset)
             | EParam::Osc1(EOscParams::FineOffset) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        voice.osc1_semitones_offset = params_modulated.osc1.semitones_offset;
-                        voice.osc1_octave_offset = params_modulated.osc1.octave_offset;
-                        voice.osc1_fine_offset = params_modulated.osc1.fine_offset;
-                        voice.update_osc1_freq();
-                    }
+                for voice in voices.iter_mut() {
+                    voice.osc1_semitones_offset = params_modulated.osc1.semitones_offset;
+                    voice.osc1_octave_offset = params_modulated.osc1.octave_offset;
+                    voice.osc1_fine_offset = params_modulated.osc1.fine_offset;
+                    voice.update_osc1_freq();
                 }
             }
             EParam::Osc2(EOscParams::SemitonesOffset)
             | EParam::Osc2(EOscParams::OctaveOffset)
             | EParam::Osc2(EOscParams::FineOffset) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        voice.osc2_semitones_offset = params_modulated.osc2.semitones_offset;
-                        voice.osc2_octave_offset = params_modulated.osc2.octave_offset;
-                        voice.osc2_fine_offset = params_modulated.osc2.fine_offset;
-                        voice.update_osc2_freq();
-                    }
+                for voice in voices.iter_mut() {
+                    voice.osc2_semitones_offset = params_modulated.osc2.semitones_offset;
+                    voice.osc2_octave_offset = params_modulated.osc2.octave_offset;
+                    voice.osc2_fine_offset = params_modulated.osc2.fine_offset;
+                    voice.update_osc2_freq();
                 }
             }
             EParam::Filt1(EFiltParams::Mode) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter1.iter_mut() {
-                            filter.set_mode(&params_modulated.filt1.mode);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter1.iter_mut() {
+                        filter.set_mode(&params_modulated.filt1.mode);
                     }
                 }
             }
             EParam::Filt1(EFiltParams::Cutoff) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter1.iter_mut() {
-                            filter.set_cutoff(params_modulated.filt1.cutoff_semi);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter1.iter_mut() {
+                        filter.set_cutoff(params_modulated.filt1.cutoff_semi);
                     }
                 }
             }
             EParam::Filt1(EFiltParams::Resonance) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter1.iter_mut() {
-                            filter.set_resonance(params_modulated.filt1.resonance);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter1.iter_mut() {
+                        filter.set_resonance(params_modulated.filt1.resonance);
                     }
                 }
             }
             EParam::Filt2(EFiltParams::Mode) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter2.iter_mut() {
-                            filter.set_mode(&params_modulated.filt2.mode);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter2.iter_mut() {
+                        filter.set_mode(&params_modulated.filt2.mode);
                     }
                 }
             }
             EParam::Filt2(EFiltParams::Cutoff) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter2.iter_mut() {
-                            filter.set_cutoff(params_modulated.filt2.cutoff_semi);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter2.iter_mut() {
+                        filter.set_cutoff(params_modulated.filt2.cutoff_semi);
                     }
                 }
             }
             EParam::Filt2(EFiltParams::Resonance) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        for filter in voice.filter2.iter_mut() {
-                            filter.set_resonance(params_modulated.filt2.resonance);
-                        }
+                for voice in voices.iter_mut() {
+                    for filter in voice.filter2.iter_mut() {
+                        filter.set_resonance(params_modulated.filt2.resonance);
                     }
                 }
             }
             EParam::AmpEnv(_amp_env_param) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        voice.amp_envelope.update_adsr(&params_modulated.amp_env);
-                    }
+                for voice in voices.iter_mut() {
+                    voice.amp_envelope.update_adsr(&params_modulated.amp_env);
                 }
             }
             EParam::ModEnv(_mod_env_param) => {
-                for (_, voices) in voices.iter_mut() {
-                    for (_, voice) in voices.iter_mut().enumerate() {
-                        voice.mod_envelope.update_adsr(&params_modulated.mod_env);
-                    }
+                for voice in voices.iter_mut() {
+                    voice.mod_envelope.update_adsr(&params_modulated.mod_env);
                 }
             }
             _ => {}
@@ -510,102 +516,102 @@ impl Sunfish {
         let filter1_enabled = self.params_modulated.filt1.enable;
         let filter2_enabled = self.params_modulated.filt2.enable;
 
-        for (_, voices) in self.voices.iter_mut() {
-            self.voices_to_drop_indices.clear();
-            for (voice_index, voice) in voices.iter_mut().enumerate() {
-                let freq_osc1 = voice.freq_osc1;
-                let freq_osc2 = voice.freq_osc2;
-                if freq_osc1 == 0.0 || freq_osc2 == 0.0 {
-                    continue;
-                }
-                // First get the envelope, independent of channel.
-                self.amp_filt_env_buf.clear();
-                let output_len = outputs[0].len();
-                if output_len > self.amp_filt_env_buf.len() {
-                    self.amp_filt_env_buf.resize(output_len, (0.0, 0.0));
-                }
-                for env_i in 0..output_len {
-                    voice.amp_envelope.next();
-                    voice.mod_envelope.next();
-                    self.amp_filt_env_buf[env_i] = (
-                        voice.amp_envelope.get_level(),
-                        voice.mod_envelope.get_level(),
+        for voice in self.voices.iter_mut() {
+            let freq_osc1 = voice.freq_osc1;
+            let freq_osc2 = voice.freq_osc2;
+            if freq_osc1 == 0.0 || freq_osc2 == 0.0 {
+                continue;
+            }
+            // First get the envelope, independent of channel.
+            self.amp_filt_env_buf.clear();
+            let output_len = outputs[0].len();
+            if output_len > self.amp_filt_env_buf.len() {
+                self.amp_filt_env_buf.resize(output_len, (0.0, 0.0));
+            }
+            for env_i in 0..output_len {
+                voice.amp_envelope.next();
+                voice.mod_envelope.next();
+                self.amp_filt_env_buf[env_i] = (
+                    voice.amp_envelope.get_level(),
+                    voice.mod_envelope.get_level(),
+                );
+            }
+
+            // Check if we should drop the note.
+            if voice.idle() {
+                continue;
+            }
+
+            let mut channel_idx_float = 0.0;
+            for (channel_idx, output_channel) in outputs.iter_mut().enumerate() {
+                let stereo_width = channel_idx_float * self.params_modulated.osc1.stereo_width;
+                if osc1_enabled {
+                    // Oscillator 1
+                    let filt = if filter1_enabled {
+                        Some(&mut voice.filter1[channel_idx])
+                    } else {
+                        None
+                    };
+                    Self::render_chain(
+                        &mut self.buf,
+                        self.dt,
+                        &mut self.interpolator,
+                        &mut voice.cached_waveforms_osc1[channel_idx],
+                        filt,
+                        freq_osc1,
+                        &self.amp_filt_env_buf,
+                        &mut voice.mod_state,
+                        self.params_modulated.filt1.cutoff_semi,
+                        self.params_modulated.filt1.env_amt,
+                        output_channel,
+                        stereo_width,
+                        &self.params_modulated.osc1.shape,
+                        &self.params_modulated.osc1.unison,
+                        self.params_modulated.osc1.unison_amt,
+                        self.params_modulated.osc1.gain,
                     );
                 }
 
-                // Check if we should drop the note.
-                if voice.amp_envelope.is_idle() {
-                    // Always insert at the beginning; we have to drop from the back
-                    // forward.
-                    self.voices_to_drop_indices.insert(0, voice_index);
-                    continue;
+                if osc2_enabled {
+                    // Oscillator 2
+                    let filt = if filter2_enabled {
+                        Some(&mut voice.filter2[channel_idx])
+                    } else {
+                        None
+                    };
+                    Self::render_chain(
+                        &mut self.buf,
+                        self.dt,
+                        &mut self.interpolator,
+                        &mut voice.cached_waveforms_osc2[channel_idx],
+                        filt,
+                        freq_osc2,
+                        &self.amp_filt_env_buf,
+                        &mut voice.mod_state,
+                        self.params_modulated.filt2.cutoff_semi,
+                        self.params_modulated.filt2.env_amt,
+                        output_channel,
+                        stereo_width,
+                        &self.params_modulated.osc2.shape,
+                        &self.params_modulated.osc2.unison,
+                        self.params_modulated.osc2.unison_amt,
+                        self.params_modulated.osc2.gain,
+                    );
                 }
-
-                let mut channel_idx_float = 0.0;
-                for (channel_idx, output_channel) in outputs.iter_mut().enumerate() {
-                    let stereo_width = channel_idx_float * self.params_modulated.osc1.stereo_width;
-                    if osc1_enabled {
-                        // Oscillator 1
-                        let filt = if filter1_enabled {
-                            Some(&mut voice.filter1[channel_idx])
-                        } else {
-                            None
-                        };
-                        Self::render_chain(
-                            &mut self.buf,
-                            self.dt,
-                            &mut self.interpolator,
-                            &mut voice.cached_waveforms_osc1[channel_idx],
-                            filt,
-                            freq_osc1,
-                            &self.amp_filt_env_buf,
-                            &mut voice.mod_state,
-                            self.params_modulated.filt1.cutoff_semi,
-                            self.params_modulated.filt1.env_amt,
-                            output_channel,
-                            stereo_width,
-                            &self.params_modulated.osc1.shape,
-                            &self.params_modulated.osc1.unison,
-                            self.params_modulated.osc1.unison_amt,
-                            self.params_modulated.osc1.gain,
-                        );
-                    }
-
-                    if osc2_enabled {
-                        // Oscillator 2
-                        let filt = if filter2_enabled {
-                            Some(&mut voice.filter2[channel_idx])
-                        } else {
-                            None
-                        };
-                        Self::render_chain(
-                            &mut self.buf,
-                            self.dt,
-                            &mut self.interpolator,
-                            &mut voice.cached_waveforms_osc2[channel_idx],
-                            filt,
-                            freq_osc2,
-                            &self.amp_filt_env_buf,
-                            &mut voice.mod_state,
-                            self.params_modulated.filt2.cutoff_semi,
-                            self.params_modulated.filt2.env_amt,
-                            output_channel,
-                            stereo_width,
-                            &self.params_modulated.osc2.shape,
-                            &self.params_modulated.osc2.unison,
-                            self.params_modulated.osc2.unison_amt,
-                            self.params_modulated.osc2.gain,
-                        );
-                    }
-                    channel_idx_float += 1.0;
-                }
-            }
-
-            // Drop all voices that have done playing.
-            for &voice_index in self.voices_to_drop_indices.iter() {
-                voices.remove(voice_index);
+                channel_idx_float += 1.0;
             }
         }
+
+        // // Drop all voices that have done playing.
+        while let Some(voice) = self.voices.front() {
+            if voice.idle() {
+                self.active_voices -= 1;
+                self.voices.pop_front();
+            } else {
+                break;
+            }
+        }
+
         for (_channel_idx, output_channel) in outputs.iter_mut().enumerate() {
             for output_sample in output_channel.iter_mut() {
                 // Apply global gain.
@@ -666,7 +672,6 @@ impl Sunfish {
                     let mod_env = mod_env * filt_env_amount;
                     let modulated_cutoff = modulation::modulate(voice_mod, 0, cutoff_semi, mod_env);
                     filter.set_cutoff(modulated_cutoff);
-                    // log::info!("Mod env set cutoff to {} semis", modulated_cutoff);
                 }
                 filter.apply(*value)
             } else {
