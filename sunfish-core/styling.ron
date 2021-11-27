@@ -232,78 +232,62 @@ background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)
         ),
     
             // ADSR Mod Panel
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: ModEnv(Attack)),
-                rect: Rect(pos: (0.542000, 0.548000, 0.572000, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.545333, 0.526667, 0.566667, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: ModEnv(Decay)),
-                rect: Rect(pos: (0.586667, 0.548000, 0.616667, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.584000, 0.526667, 0.605333, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: ModEnv(Sustain)),
-                rect: Rect(pos: (0.630667, 0.548000, 0.660667, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.622667, 0.526667, 0.644000, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: ModEnv(Release)),
-                rect: Rect(pos: (0.675333, 0.548000, 0.705333, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.661333, 0.526667, 0.682667, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
             
             // ADSR Amp Panel
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: AmpEnv(Attack)),
-                rect: Rect(pos: (0.786667, 0.548000, 0.816667, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.791333, 0.526667, 0.812667, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: AmpEnv(Decay)),
-                rect: Rect(pos: (0.831333, 0.548000, 0.861333, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.830000, 0.526667, 0.851333, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: AmpEnv(Sustain)),
-                rect: Rect(pos: (0.875333, 0.548000, 0.905333, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.868667, 0.526667, 0.890000, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: AmpEnv(Release)),
-                rect: Rect(pos: (0.920000, 0.548000, 0.950000, 0.578000)),
-                arc_color: Color(r: 0.7, g: 0.7, b: 0.7),
-                notch_color: Color(r: 0.0429, g: 0.0468, b: 0.0507),
-                label: None,
-                value_text: Text(pos: Below(offset_relative: Some(0.006)), value: "", scale: 0.013),
+                rect: Rect(pos: (0.907333, 0.526667, 0.928667, 0.608667)),
+                sprite: Some(VSliderSprite(active: Rect(pos: (172.000000, 997.000000, 204.000000, 1023.000000)))),
+                value_text: Text(pos: Below(offset_relative: Some(0.019)), value: "", scale: 0.013),
                 value_text_color: Color(r: 0.30039, g: 0.30039, b: 0.3019),
             ),
             
