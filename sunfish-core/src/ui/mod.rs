@@ -2,6 +2,7 @@ pub mod alignment;
 pub mod buffers;
 pub mod coords;
 pub mod editor;
+pub mod packed_shapes;
 pub mod shapes;
 pub mod sprites;
 pub mod styling;

@@ -23,16 +23,12 @@ impl SpriteVertex {
 
     /// Create a new vertex corrected to screen metrics.
     pub fn correct(&self, screen_metrics: &ScreenMetrics) -> Self {
-        // let x = screen_metrics.norm_x_to_corrected(self.position[0]) * 2.0 - 1.0;
-        // let y = screen_metrics.norm_y_to_corrected(self.position[1]) * -2.0 + 1.0;
         let x0 = self.position[0];
         let y0 = self.position[1];
         let x1 = screen_metrics.norm_x_to_corrected(x0);
         let y1 = screen_metrics.norm_y_to_corrected(y0);
         let x = x1 * 2.0 - 1.0;
         let y = y1 * -2.0 + 1.0;
-        // TODO: let x = screen_metrics.norm_x_to_corrected(x);
-        // TODO: let y = screen_metrics.norm_y_to_corrected(y);
         SpriteVertex {
             position: [x, y, 0.0],
             tex_coords: self.tex_coords,
@@ -87,10 +83,9 @@ pub struct SpriteSheet {
 impl SpriteSheet {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, filename: &str) -> Self {
         let texture_bytes = std::fs::read(filename).unwrap();
-        println!("Loading spritesheet...");
+        log::info!("Loading spritesheet...");
         let texture =
             texture::Texture::from_bytes(device, queue, &texture_bytes, filename).unwrap();
-        //let _ = texture::Texture::from_png(&device, &queue, &filename, &filename);
         SpriteSheet {
             sprites: vec![],
             texture,
@@ -141,7 +136,7 @@ impl BoundSpriteSheet {
         let buffers =
             Self::create_buffers(device, &mut vertices, &mut indices, sheet, screen_metrics);
 
-        println!("Creating sprite bind groups...");
+        log::info!("Creating sprite bind groups...");
         let sprite_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -185,7 +180,7 @@ impl BoundSpriteSheet {
         let sprite_fs_module =
             device.create_shader_module(wgpu::include_spirv!("shader_sprite.frag.spv"));
 
-        println!("Creating pipelines...");
+        log::info!("Creating pipelines...");
         let sprite_render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("sprite_render_pipeline_layout"),
@@ -247,7 +242,6 @@ impl BoundSpriteSheet {
 
         let mut i = 0;
         for (sprite_i, sprite) in sheet.sprites.iter().enumerate() {
-            // TODO:
             let (x, y) = sprite.pos.unpack();
             let (w, h) = sprite.size.unpack();
 
@@ -263,25 +257,21 @@ impl BoundSpriteSheet {
             );
             let vi = sprite_i * 4;
             vertices[vi] = SpriteVertex {
-                //position: [x * 2.0 - 1.0, y * -2.0 + 1.0, 0.0],
                 position: [x, y, 0.0],
                 tex_coords: [src_x, src_y],
             }
             .correct(screen_metrics);
             vertices[vi + 1] = SpriteVertex {
-                //position: [xw * 2.0 - 1.0, y * -2.0 + 1.0, 0.0],
                 position: [xw, y, 0.0],
                 tex_coords: [src_xw, src_y],
             }
             .correct(screen_metrics);
             vertices[vi + 2] = SpriteVertex {
-                //position: [xw * 2.0 - 1.0, yh * -2.0 + 1.0, 0.0],
                 position: [xw, yh, 0.0],
                 tex_coords: [src_xw, src_yh],
             }
             .correct(screen_metrics);
             vertices[vi + 3] = SpriteVertex {
-                // position: [x * 2.0 - 1.0, yh * -2.0 + 1.0, 0.0],
                 position: [x, yh, 0.0],
                 tex_coords: [src_x, src_yh],
             }

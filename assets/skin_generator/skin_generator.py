@@ -344,7 +344,7 @@ def main() -> None:
 
     with open("output.ron", "w") as file:
         file.write("(\n")
-        file.write("""background_image: Some("synth4_background.png"),\n""")
+        file.write("""stylesheet_image: Some("synth4_background.png"),\n""")
         file.write(f"size: ({WIDTH}, {HEIGHT}),\n")
         file.write(f"padding: ({DEFAULT_PADDING_X}, {DEFAULT_PADDING_Y}),\n")
 

@@ -6,8 +6,9 @@ use crate::params::sync::Synchronizer;
 use crate::params::{EParam, ParamsMeta};
 use crate::ui::alignment::{HorizontalAlign, VerticalAlign};
 use crate::ui::coords::{Coord2, Rect, UserVec2, Vec2};
+use crate::ui::packed_shapes::{Shape, Shapes};
 use crate::ui::shapes;
-use crate::ui::shapes::{Color, Polarity};
+use crate::ui::shapes::{Color, Polarity, ScreenMetrics, ShapeVertex};
 use crate::ui::sprites;
 use crate::ui::window::ActiveMouseState;
 
@@ -69,10 +70,10 @@ struct UpdateContext<'a> {
     params: &'a Synchronizer,
     id: &'a WidgetId,
     rect: &'a Rect,
-    screen_metrics: &'a shapes::ScreenMetrics,
+    screen_metrics: &'a ScreenMetrics,
     #[allow(dead_code)]
     spritesheet: &'a mut sprites::SpriteSheet,
-    shapes: &'a mut shapes::Shapes,
+    shapes: &'a mut Shapes<ShapeVertex>,
 }
 
 #[derive(Debug)]
@@ -155,9 +156,9 @@ impl Widget {
 
     pub fn initialize(
         &mut self,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         match &mut self.wt {
             WidgetClass::Knob(knob) => {
@@ -180,9 +181,9 @@ impl Widget {
 
     pub fn update(
         &mut self,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
         params: &Synchronizer,
     ) {
         let value = self.tentative_value.unwrap_or(self.value);
@@ -216,9 +217,9 @@ impl Widget {
 
     pub fn on_resize(
         &mut self,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
         params: &Synchronizer,
     ) {
         let value = self.tentative_value.unwrap_or(self.value);
@@ -377,7 +378,7 @@ impl Knob {
     }
 
     fn create_notch(
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         arc: &shapes::Arc,
         value: f64,
         notch_color: &Color,
@@ -413,10 +414,10 @@ impl Knob {
     fn initialize(
         &mut self,
         rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         _value: f64,
         _spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         // self.sprite_index = SpriteIndex(spritesheet.add(sprites::Sprite {
         //     pos: UserVec2::Rel(Vec2 {
@@ -434,7 +435,7 @@ impl Knob {
             let max_v_count = max_arc_buf.vertices.len() + vmargin;
             let max_i_count = max_arc_buf.indices.len() + imargin;
 
-            shapes.add(shapes::Shape::from_lyon(
+            shapes.add(Shape::from_lyon(
                 self.arc.render(screen_metrics),
                 max_v_count,
                 max_i_count,
@@ -450,25 +451,21 @@ impl Knob {
                 );
                 let max_v_count = buffers.vertices.len();
                 let max_i_count = buffers.indices.len();
-                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count))
+                shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count))
             });
         }
         self.inner_notch_index = ShapeIndex({
             let line_segment = Self::create_notch(screen_metrics, &max_arc, 1.0, &self.notch_color);
             let max_v_count = line_segment.vertices.len() + vmargin;
             let max_i_count = line_segment.indices.len() + imargin;
-            shapes.add(shapes::Shape::from_lyon(
-                line_segment,
-                max_v_count,
-                max_i_count,
-            ))
+            shapes.add(Shape::from_lyon(line_segment, max_v_count, max_i_count))
         });
 
         // self.circle_index = ShapeIndex({
         //     let buffers = shapes::circle_outline(rect, screen_metrics, 0.001);
         //     let max_v_count = buffers.vertices.len();
         //     let max_i_count = buffers.indices.len();
-        //     shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count))
+        //     shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count))
         // });
     }
 
@@ -587,10 +584,10 @@ impl VSlider {
     fn initialize(
         &mut self,
         rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         value: f64,
         spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         if VSLIDER_DEBUG_OUTLINE {
             let buffers = shapes::rectangle_outline(
@@ -601,8 +598,7 @@ impl VSlider {
             );
             let max_v_count = buffers.vertices.len();
             let max_i_count = buffers.indices.len();
-            let outer_shape_index =
-                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+            let outer_shape_index = shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count));
             self.outer_shape_index = ShapeIndex(outer_shape_index);
         }
         let thumb_rect = Self::thumb_rect(rect, &self.thumb_size, value);
@@ -623,8 +619,7 @@ impl VSlider {
             let buffers = shapes::rectangle_solid(&thumb_rect, screen_metrics);
             let max_v_count = buffers.vertices.len();
             let max_i_count = buffers.indices.len();
-            let thumb_index =
-                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+            let thumb_index = shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count));
 
             self.thumb_index = ShapeIndex(thumb_index);
         }
@@ -736,9 +731,9 @@ impl Spinner {
     fn initialize(
         &mut self,
         rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         _spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         //
         let buffers =
@@ -747,7 +742,7 @@ impl Spinner {
         let max_i_count = buffers.indices.len();
         if SPINNER_OUTLINE {
             self.outline_index =
-                ShapeIndex(shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count)));
+                ShapeIndex(shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count)));
         }
     }
 
@@ -821,15 +816,15 @@ impl Panel {
     fn initialize(
         &mut self,
         rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         _spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         let buffers = shapes::rectangle_outline(rect, screen_metrics, 0.003, &PANEL_OUTLINE_COLOR);
         let max_v_count = buffers.vertices.len();
         let max_i_count = buffers.indices.len();
         self.outline_index =
-            ShapeIndex(shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count)));
+            ShapeIndex(shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count)));
     }
 
     fn on_resize(&mut self, ctx: &mut UpdateContext, _value: f64) {
@@ -887,10 +882,10 @@ impl Toggle {
     fn initialize(
         &mut self,
         rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
+        screen_metrics: &ScreenMetrics,
         value: f64,
         spritesheet: &mut sprites::SpriteSheet,
-        shapes: &mut shapes::Shapes,
+        shapes: &mut Shapes<ShapeVertex>,
     ) {
         // TODO: Value computation
         let value = Self::value_to_bool(value);
@@ -909,17 +904,12 @@ impl Toggle {
             let buffers = Self::create_toggle(rect, screen_metrics, value);
             let max_v_count = buffers.vertices.len();
             let max_i_count = buffers.indices.len();
-            let thumb_index =
-                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+            let thumb_index = shapes.add(Shape::from_lyon(buffers, max_v_count, max_i_count));
             self.thumb_index = ShapeIndex(thumb_index);
         }
     }
 
-    fn create_toggle(
-        rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
-        value: bool,
-    ) -> shapes::Buffers {
+    fn create_toggle(rect: &Rect, screen_metrics: &ScreenMetrics, value: bool) -> shapes::Buffers {
         let contracted = rect.contract(0.01);
         let r = if value { rect } else { &contracted };
         shapes::rectangle_solid(r, screen_metrics)
@@ -929,7 +919,7 @@ impl Toggle {
         value >= 0.5
     }
 
-    fn _create_outline(rect: &Rect, screen_metrics: &shapes::ScreenMetrics) -> shapes::Buffers {
+    fn _create_outline(rect: &Rect, screen_metrics: &ScreenMetrics) -> shapes::Buffers {
         shapes::rectangle_outline(rect, screen_metrics, 0.001, &TOGGLE_OUTLINE_COLOR)
     }
 
