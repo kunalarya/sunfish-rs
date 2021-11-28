@@ -32,12 +32,15 @@ pub enum Element {
         notch_color: Color,
         label: Option<widgets::Text>,
         value_text: widgets::Text,
-        polarity: Option<Polarity>,
         value_text_color: Color,
+        polarity: Option<Polarity>,
     },
     VSlider {
         widget_id: widgets::WidgetId,
         rect: Rect,
+        sprite: Option<widgets::VSliderSprite>,
+        value_text: widgets::Text,
+        value_text_color: Color,
     },
     Spinner {
         widget_id: widgets::WidgetId,
@@ -93,8 +96,8 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 notch_color,
                 label,
                 value_text,
-                polarity,
                 value_text_color,
+                polarity,
             } => {
                 widgets.push(widgets::Knob::new_widget(
                     Arc::clone(&meta),
@@ -155,12 +158,21 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                     sprite.clone(),
                 ));
             }
-            Element::VSlider { widget_id, rect } => {
+            Element::VSlider {
+                widget_id,
+                rect,
+                sprite,
+                value_text,
+                value_text_color,
+            } => {
                 widgets.push(widgets::VSlider::new_widget(
                     Arc::clone(&meta),
                     *widget_id,
                     rect.clone(),
                     0.0,
+                    sprite.clone(),
+                    value_text.clone(),
+                    value_text_color.clone(),
                 ));
             }
         }

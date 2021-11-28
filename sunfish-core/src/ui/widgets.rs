@@ -17,6 +17,11 @@ const DEFAULT_TEXT_COLOR: Color = Color {
     b: 0.0,
 };
 
+const KNOB_DEBUG_OUTLINE: bool = false;
+const KNOB_DEBUG_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
+const VSLIDER_DEBUG_OUTLINE: bool = false;
+const VSLIDER_DEBUG_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
+
 #[allow(dead_code)]
 const TOGGLE_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
 
@@ -107,7 +112,7 @@ impl Widget {
         match &self.wt {
             WidgetClass::Knob(knob) => knob.apply_to_texts(f),
             WidgetClass::Spinner(spinner) => spinner.apply_to_texts(f),
-            WidgetClass::VSlider(_vslider) => { /* TODO */ }
+            WidgetClass::VSlider(vslider) => vslider.apply_to_texts(f),
             WidgetClass::Panel(_panel) => { /* TODO */ }
             WidgetClass::Toggle(toggle) => toggle.apply_to_texts(f),
         }
@@ -263,8 +268,6 @@ pub enum WidgetClass {
     Toggle(Toggle),
 }
 
-const KNOB_DEBUG_OUTLINE: bool = false;
-const KNOB_DEBUG_OUTLINE_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
 const KNOB_OUTLINE_WIDTH: f32 = 0.001;
 const KNOB_ARC_WIDTH: f32 = 0.001;
 
@@ -534,27 +537,50 @@ impl Knob {
     }
 }
 
-const VSLIDER_OUTLINE_COLOR: [f32; 3] = [1.0, 1.0, 1.0];
-
 #[derive(Debug)]
 pub struct VSlider {
     outer_shape_index: ShapeIndex,
     thumb_index: ShapeIndex,
     thumb_size: Coord2,
+    sprite_info: Option<VSliderSprite>,
+    thumb_sprite_index: Option<SpriteIndex>,
+    value_text: Text,
+    value_text_color: Color,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct VSliderSprite {
+    active: Rect,
 }
 
 impl VSlider {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(
+        sprite_info: Option<VSliderSprite>,
+        value_text: Text,
+        value_text_color: Color,
+    ) -> Self {
         VSlider {
             outer_shape_index: ShapeIndex(0),
             thumb_index: ShapeIndex(0),
             thumb_size: Coord2::new(0.02, 0.02),
+            sprite_info,
+            thumb_sprite_index: None,
+            value_text,
+            value_text_color,
         }
     }
 
-    pub fn new_widget(meta: Arc<ParamsMeta>, id: WidgetId, rect: Rect, value: f64) -> Widget {
-        let vslider = Self::new();
+    pub fn new_widget(
+        meta: Arc<ParamsMeta>,
+        id: WidgetId,
+        rect: Rect,
+        value: f64,
+        sprite_info: Option<VSliderSprite>,
+        value_text: Text,
+        value_text_color: Color,
+    ) -> Widget {
+        let vslider = Self::new(sprite_info, value_text, value_text_color);
         Widget::new(meta, id, rect, value, WidgetClass::VSlider(vslider))
     }
 
@@ -563,36 +589,51 @@ impl VSlider {
         rect: &Rect,
         screen_metrics: &shapes::ScreenMetrics,
         value: f64,
-        _spritesheet: &mut sprites::SpriteSheet,
+        spritesheet: &mut sprites::SpriteSheet,
         shapes: &mut shapes::Shapes,
     ) {
-        let buffers =
-            shapes::rectangle_outline(rect, screen_metrics, 0.001, &VSLIDER_OUTLINE_COLOR);
-        let max_v_count = buffers.vertices.len();
-        let max_i_count = buffers.indices.len();
-        let outer_shape_index =
-            shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+        if VSLIDER_DEBUG_OUTLINE {
+            let buffers = shapes::rectangle_outline(
+                rect,
+                screen_metrics,
+                0.001,
+                &VSLIDER_DEBUG_OUTLINE_COLOR,
+            );
+            let max_v_count = buffers.vertices.len();
+            let max_i_count = buffers.indices.len();
+            let outer_shape_index =
+                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
+            self.outer_shape_index = ShapeIndex(outer_shape_index);
+        }
+        let thumb_rect = Self::thumb_rect(rect, &self.thumb_size, value);
+        if let Some(sprite_info) = &self.sprite_info {
+            self.thumb_sprite_index = Some(SpriteIndex(spritesheet.add(sprites::Sprite {
+                pos: UserVec2::Rel(Vec2 {
+                    pos: [thumb_rect.pos[0], thumb_rect.pos[1]],
+                }),
+                size: UserVec2::Rel(Vec2 {
+                    pos: thumb_rect.size(),
+                }),
+                src_px: sprites::SpriteSource {
+                    src_rect: sprite_info.active.pos,
+                },
+            })));
+        } else {
+            // TODO: Value computation
+            let buffers = shapes::rectangle_solid(&thumb_rect, screen_metrics);
+            let max_v_count = buffers.vertices.len();
+            let max_i_count = buffers.indices.len();
+            let thumb_index =
+                shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
 
-        // TODO: Value computation
-        let buffers = Self::create_thumb(rect, screen_metrics, &self.thumb_size, value);
-        let max_v_count = buffers.vertices.len();
-        let max_i_count = buffers.indices.len();
-        let thumb_index = shapes.add(shapes::Shape::from_lyon(buffers, max_v_count, max_i_count));
-
-        self.outer_shape_index = ShapeIndex(outer_shape_index);
-        self.thumb_index = ShapeIndex(thumb_index);
+            self.thumb_index = ShapeIndex(thumb_index);
+        }
     }
 
-    fn create_thumb(
-        rect: &Rect,
-        screen_metrics: &shapes::ScreenMetrics,
-        thumb_size: &Coord2,
-        value: f64,
-    ) -> shapes::Buffers {
+    fn thumb_rect(rect: &Rect, thumb_size: &Coord2, value: f64) -> Rect {
         let thumb_dist = rect.height() - thumb_size.y;
         let thumb_top = ((1.0 - value as f32) * thumb_dist) + rect.y1();
-        let thumb_rect = Rect::new(rect.x1(), thumb_top, rect.x2(), thumb_top + thumb_size.y);
-        shapes::rectangle_solid(&thumb_rect, screen_metrics)
+        Rect::new(rect.x1(), thumb_top, rect.x2(), thumb_top + thumb_size.y)
     }
 
     #[inline(always)]
@@ -613,20 +654,48 @@ impl VSlider {
     }
 
     fn update(&mut self, ctx: &mut UpdateContext, value: f64) {
-        let buf = Self::create_thumb(ctx.rect, ctx.screen_metrics, &self.thumb_size, value);
-        ctx.shapes
-            .update(self.thumb_index.0, &buf.vertices, &buf.indices);
+        let thumb_rect = Self::thumb_rect(ctx.rect, &self.thumb_size, value);
+        if self.sprite_info.is_some() {
+            ctx.spritesheet.update_sprite(
+                self.thumb_sprite_index.unwrap().0,
+                &sprites::SpriteUpdate {
+                    pos: Some(UserVec2::Rel(Vec2 {
+                        pos: [thumb_rect.pos[0], thumb_rect.pos[1]],
+                    })),
+                    ..Default::default()
+                },
+            );
+        } else {
+            let buf = shapes::rectangle_solid(&thumb_rect, ctx.screen_metrics);
+            ctx.shapes
+                .update(self.thumb_index.0, &buf.vertices, &buf.indices);
+        }
+
+        // Update value label.
+        if let WidgetId::Bound { eparam } = ctx.id {
+            self.value_text.value = ctx.params.formatted_value(*eparam);
+        }
     }
 
     fn on_resize(&mut self, ctx: &mut UpdateContext, value: f64) {
         self.update(ctx, value);
-        let buffers =
-            shapes::rectangle_outline(ctx.rect, ctx.screen_metrics, 0.001, &VSLIDER_OUTLINE_COLOR);
-        ctx.shapes.update(
-            self.outer_shape_index.0,
-            &buffers.vertices,
-            &buffers.indices,
-        );
+        if VSLIDER_DEBUG_OUTLINE {
+            let buffers = shapes::rectangle_outline(
+                ctx.rect,
+                ctx.screen_metrics,
+                0.001,
+                &VSLIDER_DEBUG_OUTLINE_COLOR,
+            );
+            ctx.shapes.update(
+                self.outer_shape_index.0,
+                &buffers.vertices,
+                &buffers.indices,
+            );
+        }
+    }
+
+    pub fn apply_to_texts<F: FnMut(&Text, &Color)>(&self, mut f: F) {
+        f(&self.value_text, &self.value_text_color);
     }
 }
 

@@ -37,6 +37,9 @@ KN_VALUE_FONT_SCALE = 0.013
 KN_VALUE_COLOR = "Color(r: 0.30039, g: 0.30039, b: 0.3019)"
 KN_DEF_VALUE_POS = "Below(offset_relative: Some(0.006))"
 
+# Sliders
+SL_DEF_VALUE_POS = "Below(offset_relative: Some(0.019))"
+
 BACKGROUND_UNSCALED = (40, 50, 64)
 
 BACKGROUND_COLOR = (float(c) / 256.0 for c in BACKGROUND_UNSCALED)
@@ -287,11 +290,13 @@ def create_lfo_panel(screen: ScreenMetrics, out: TextIO, lfo: int) -> None:
 
 
 def create_adsr_panel(screen: ScreenMetrics, out: TextIO, adsr: int) -> None:
-    x_offset = 367 * (adsr - 1)
-    attack_rect = Rect.from_offset(x_offset + 813, 822, 45, 45)
-    decay_rect = Rect.from_offset(x_offset + 880, 822, 45, 45)
-    sustain_rect = Rect.from_offset(x_offset + 946, 822, 45, 45)
-    release_rect = Rect.from_offset(x_offset + 1013, 822, 45, 45)
+    x_offset = 369 * (adsr - 1)
+    attack_rect = Rect.from_offset(x_offset + 818, 790, 32, 123)
+    decay_rect = Rect.from_offset(x_offset + 876, 790, 32, 123)
+    sustain_rect = Rect.from_offset(x_offset + 934, 790, 32, 123)
+    release_rect = Rect.from_offset(x_offset + 992, 790, 32, 123)
+
+    thumb_sprite = Rect.from_offset(172, 997, 32, 26)
 
     name = "Mod" if adsr == 1 else "Amp"
 
@@ -302,40 +307,32 @@ def create_adsr_panel(screen: ScreenMetrics, out: TextIO, adsr: int) -> None:
     out.write(
         f"""
             // ADSR {name} Panel
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: {name}Env(Attack)),
                 rect: {emit(attack_rect)},
-                arc_color: {KN_STD_ARC_COLOR},
-                notch_color: {KN_LIGHT_NOTCH_COLOR},
-                label: None,
-                value_text: Text(pos: {KN_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
+                sprite: Some(VSliderSprite(active: {thumb_sprite.to_str()})),
+                value_text: Text(pos: {SL_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
                 value_text_color: {KN_VALUE_COLOR},
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: {name}Env(Decay)),
                 rect: {emit(decay_rect)},
-                arc_color: {KN_STD_ARC_COLOR},
-                notch_color: {KN_LIGHT_NOTCH_COLOR},
-                label: None,
-                value_text: Text(pos: {KN_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
+                sprite: Some(VSliderSprite(active: {thumb_sprite.to_str()})),
+                value_text: Text(pos: {SL_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
                 value_text_color: {KN_VALUE_COLOR},
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: {name}Env(Sustain)),
                 rect: {emit(sustain_rect)},
-                arc_color: {KN_STD_ARC_COLOR},
-                notch_color: {KN_LIGHT_NOTCH_COLOR},
-                label: None,
-                value_text: Text(pos: {KN_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
+                sprite: Some(VSliderSprite(active: {thumb_sprite.to_str()})),
+                value_text: Text(pos: {SL_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
                 value_text_color: {KN_VALUE_COLOR},
             ),
-            Knob(
+            VSlider(
                 widget_id: Bound(eparam: {name}Env(Release)),
                 rect: {emit(release_rect)},
-                arc_color: {KN_STD_ARC_COLOR},
-                notch_color: {KN_LIGHT_NOTCH_COLOR},
-                label: None,
-                value_text: Text(pos: {KN_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
+                sprite: Some(VSliderSprite(active: {thumb_sprite.to_str()})),
+                value_text: Text(pos: {SL_DEF_VALUE_POS}, value: "", scale: {KN_VALUE_FONT_SCALE}),
                 value_text_color: {KN_VALUE_COLOR},
             ),
             """
