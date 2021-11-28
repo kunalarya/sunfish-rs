@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync;
 use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
@@ -15,8 +16,9 @@ use winit::{
 
 use crate::params::sync::{Subscriber, Synchronizer};
 use crate::params::{Params, ParamsMeta};
+use crate::ui::buffer_memory;
 use crate::ui::coords::{Coord2, UserVec2, Vec2};
-use crate::ui::shapes;
+use crate::ui::shapes::{self, ScreenMetrics};
 use crate::ui::sprites;
 use crate::ui::styling;
 use crate::ui::widgets::{LabelPosition, Widget, WidgetId};
@@ -124,14 +126,13 @@ struct RenderState {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     last_position: winit::dpi::PhysicalPosition<f64>,
-    screen_metrics: shapes::ScreenMetrics,
+    screen_metrics: ScreenMetrics,
     _aspect_ratio: f32,
 
     background: [f64; 3],
-    background_image: sprites::SpriteSheet,
-    bound_background_image: sprites::BoundSpriteSheet,
+    background_sprite_index: Option<usize>,
+    spritesheet: sprites::SpriteSheet,
     shapes: shapes::Shapes,
-    bound_shapes: shapes::BoundShapes,
     glyph_brush: GlyphBrush<(), ab_glyph::FontArc, RandomXxHashBuilder64>,
     staging_belt: wgpu::util::StagingBelt,
 
@@ -156,8 +157,7 @@ impl RenderState {
 
         let size = window.inner_size();
 
-        let screen_metrics =
-            shapes::ScreenMetrics::new(size.width, size.height, window.scale_factor());
+        let screen_metrics = ScreenMetrics::new(size.width, size.height, window.scale_factor());
 
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
@@ -186,11 +186,11 @@ impl RenderState {
         /////////////////////////////////////////////////////////////////
         // Sprites
         /////////////////////////////////////////////////////////////////
-        let background_base_filename = styling
-            .background_image
+        let stylesheet_base_filename = styling
+            .stylesheet_image
             .as_ref()
             .cloned()
-            .unwrap_or_else(|| "synthsheet.png".to_string());
+            .expect("Stylesheet image could not be loaded");
 
         // Go up one folder
         let assets_folder = {
@@ -200,19 +200,23 @@ impl RenderState {
             base.join("assets")
         };
 
-        let filename = assets_folder.join(background_base_filename);
+        let filename = assets_folder.join(stylesheet_base_filename);
         log::info!("Sprite base filename: {:?}", filename);
 
-        let mut spritesheet =
-            sprites::SpriteSheet::new(&device, &queue, filename.to_str().unwrap());
+        let mut spritesheet_builder = sprites::SpriteSheetBuilder::new(
+            &device,
+            &swapchain_format,
+            &queue,
+            filename.to_str().unwrap(),
+        );
 
         // Add a background, if one is given.
-        if let styling::Background::Sprite {
+        let background_sprite_index = if let styling::Background::Sprite {
             dest_rect,
             src_rect,
         } = &styling.background
         {
-            spritesheet.add(sprites::Sprite {
+            Some(spritesheet_builder.add(sprites::SpriteBuilder {
                 pos: UserVec2::Rel(Vec2 {
                     pos: [dest_rect.x1(), dest_rect.y1()],
                 }),
@@ -222,28 +226,29 @@ impl RenderState {
                 src_px: sprites::SpriteSource {
                     src_rect: src_rect.pos,
                 },
-            });
-        }
+            }))
+        } else {
+            None
+        };
         // add all widgets
         let mut widget_map = HashMap::new();
-        let mut shapes = shapes::Shapes::with_capacity(widgets.len());
+        let mut shapes_builder =
+            shapes::ShapesBuilder::with_capacity(128, &device, &swapchain_format);
         for mut widget in widgets.drain(..) {
-            widget.initialize(&screen_metrics, &mut spritesheet, &mut shapes);
+            widget.initialize(
+                &screen_metrics,
+                &mut spritesheet_builder,
+                &mut shapes_builder,
+            );
             widget_map.insert(widget.id, widget);
         }
-
-        let bound_spritesheet = sprites::BoundSpriteSheet::new(
-            &device,
-            &swapchain_format,
-            &spritesheet,
-            &screen_metrics,
-        );
 
         /////////////////////////////////////////////////////////////////
         // Shapes
         /////////////////////////////////////////////////////////////////
 
-        let bound_shapes = shapes::BoundShapes::new(&device, &swapchain_format, &shapes);
+        let spritesheet = spritesheet_builder.build(&screen_metrics);
+        let shapes = shapes_builder.build();
 
         ///////////////////////////
 
@@ -296,13 +301,12 @@ impl RenderState {
             last_position: winit::dpi::PhysicalPosition::new(0.0, 0.0),
 
             background: background_color,
+            background_sprite_index,
 
             default_padding: Coord2::new(styling.padding.0, styling.padding.1),
 
-            background_image: spritesheet,
-            bound_background_image: bound_spritesheet,
+            spritesheet,
             shapes,
-            bound_shapes,
             glyph_brush,
             staging_belt,
 
@@ -323,38 +327,69 @@ impl RenderState {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
-        self.screen_metrics = shapes::ScreenMetrics::new(
+        self.screen_metrics = ScreenMetrics::new(
             new_size.width,
             new_size.height,
             self.screen_metrics.scale_factor,
         );
-        self.update_widgets(widgets, params);
-        // TODO: Update only specific widgets.
+        self.update_all_widgets(widgets, params);
         for (_widget_id, widget) in widgets.iter_mut() {
             widget.on_resize(
                 &self.screen_metrics,
-                &mut self.background_image,
+                &mut self.spritesheet,
                 &mut self.shapes,
                 params,
             );
         }
     }
 
-    fn update_widgets(&mut self, widgets: &mut WidgetMap, params: &Synchronizer) {
-        // TODO: Update only specific widgets.
+    fn update_all_widgets(&mut self, widgets: &mut WidgetMap, params: &Synchronizer) {
         for (_widget_id, widget) in widgets.iter_mut() {
             widget.update(
                 &self.screen_metrics,
-                &mut self.background_image,
+                &mut self.spritesheet,
                 &mut self.shapes,
                 params,
             );
         }
-        self.bound_background_image.update(
-            &self.device,
-            &self.background_image,
-            &self.screen_metrics,
-        );
+        if let Some(sprite_index) = self.background_sprite_index {
+            self.spritesheet.update_sprite(
+                sprite_index,
+                &sprites::SpriteUpdate::default(),
+                &self.screen_metrics,
+            );
+        }
+    }
+
+    fn update_widgets(
+        &mut self,
+        widgets: &mut WidgetMap,
+        params: &Synchronizer,
+        updates: &HashSet<WidgetId>,
+    ) {
+        for (widget_id, widget) in widgets.iter_mut() {
+            if updates.contains(widget_id) {
+                widget.update(
+                    &self.screen_metrics,
+                    &mut self.spritesheet,
+                    &mut self.shapes,
+                    params,
+                );
+            }
+        }
+    }
+
+    fn update_widget(&mut self, widgets: &mut WidgetMap, params: &Synchronizer, id: &WidgetId) {
+        if let Some(widget) = widgets.get_mut(id) {
+            widget.update(
+                &self.screen_metrics,
+                &mut self.spritesheet,
+                &mut self.shapes,
+                params,
+            );
+        } else {
+            log::warn!("update_widget: widget not found! id={:?}", id);
+        }
     }
 
     async fn render(&mut self, widgets: &mut WidgetMap) {
@@ -375,10 +410,17 @@ impl RenderState {
             });
 
         // Note: read wgpu docs before reordering any of these operations.
-        shapes::update(
+        buffer_memory::update(
             &self.device,
-            &mut self.shapes,
-            &mut self.bound_shapes,
+            &mut self.shapes.shapes,
+            &mut self.shapes.bufmem,
+            &mut self.staging_belt,
+            &mut encoder,
+        );
+        buffer_memory::update(
+            &self.device,
+            &mut self.spritesheet.shapes,
+            &mut self.spritesheet.bufmem,
             &mut self.staging_belt,
             &mut encoder,
         );
@@ -400,9 +442,8 @@ impl RenderState {
                 depth_stencil_attachment: None,
             });
             // Render sprites first, then shapes.
-            let rpass =
-                sprites::render(&self.bound_background_image, rpass, &self.background_image);
-            shapes::render(&self.bound_shapes, rpass);
+            let rpass = self.spritesheet.render(rpass);
+            self.shapes.render(rpass);
         }
 
         for widget in widgets.values_mut() {
@@ -556,6 +597,7 @@ pub struct SynthGui {
     #[allow(dead_code)]
     meta: sync::Arc<ParamsMeta>,
     param_sync_poller: Poller,
+    widgets_to_update: HashSet<WidgetId>,
 
     _ignore_next_resized_event: bool,
 }
@@ -570,8 +612,10 @@ impl SynthGui {
         let meta = (parameters.grabbed.as_ref().unwrap()).meta.clone();
 
         let meta = sync::Arc::new(meta);
+        let param_count = meta.count();
         let state = async_std::task::block_on(State::new(sync::Arc::clone(&meta), window, styling));
         let param_sync_duration = Duration::from_secs_f32(1.0 / PARAM_SYNC_PER_SEC);
+
         let mut synth_gui = SynthGui {
             state,
 
@@ -579,6 +623,7 @@ impl SynthGui {
             subscriber,
             meta,
             param_sync_poller: Poller::new(param_sync_duration),
+            widgets_to_update: HashSet::with_capacity(param_count),
 
             _ignore_next_resized_event: false,
         };
@@ -592,7 +637,6 @@ impl SynthGui {
         event: Event<'a, ()>,
         control_flow: &mut ControlFlow,
     ) {
-        // TODO: Should we unconditionally render?
         if self.param_sync_poller.tick() {
             self.parameters.refresh_maybe();
             self.synchronize_params();
@@ -686,6 +730,11 @@ impl SynthGui {
                                 if let Some(widget) = self.state.widgets.get_mut(&id) {
                                     if let Some(new_value) = widget.on_drag_done() {
                                         self.update_param(&id, new_value);
+                                        self.state.render_state.update_widget(
+                                            &mut self.state.widgets,
+                                            &self.parameters,
+                                            &id,
+                                        );
                                     }
                                 }
                                 if input_state == ElementState::Released {
@@ -713,6 +762,7 @@ impl SynthGui {
                     if let InteractiveState::Dragging { id, mouse } =
                         &mut self.state.interactive_state
                     {
+                        let id = *id;
                         mouse.pos.x = self.state.mouse_pos.x;
                         mouse.pos.y = self.state.mouse_pos.y;
                         let df = if self.state.modifier_active_ctrl {
@@ -720,14 +770,15 @@ impl SynthGui {
                         } else {
                             DRAG_FACTOR_NORMAL
                         };
-                        if let Some(widget) = self.state.widgets.get_mut(id) {
+                        if let Some(widget) = self.state.widgets.get_mut(&id) {
                             let tentative_value = widget.on_dragging(mouse, &df);
-                            let id = *id;
                             self.update_param(&id, tentative_value);
                         }
-                        self.state
-                            .render_state
-                            .update_widgets(&mut self.state.widgets, &self.parameters);
+                        self.state.render_state.update_widget(
+                            &mut self.state.widgets,
+                            &self.parameters,
+                            &id,
+                        );
                     }
                     self.state.render_state.last_position = position;
                     window.request_redraw();
@@ -766,6 +817,7 @@ impl SynthGui {
         let mut any_changed = false;
         if let Ok(guard) = self.subscriber.changes.try_lock() {
             let changes = &(*guard);
+            self.widgets_to_update.clear();
             for (updated_eparam, updated_value) in changes {
                 any_changed = true;
                 let widget_id = WidgetId::Bound {
@@ -774,11 +826,14 @@ impl SynthGui {
                 if let Some(widget) = self.state.widgets.get_mut(&widget_id) {
                     widget.value = *updated_value;
                 }
+                self.widgets_to_update.insert(widget_id);
             }
             if any_changed {
-                self.state
-                    .render_state
-                    .update_widgets(&mut self.state.widgets, &self.parameters);
+                self.state.render_state.update_widgets(
+                    &mut self.state.widgets,
+                    &self.parameters,
+                    &self.widgets_to_update,
+                );
             }
         }
         any_changed

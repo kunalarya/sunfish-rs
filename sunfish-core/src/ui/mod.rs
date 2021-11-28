@@ -1,7 +1,9 @@
 pub mod alignment;
+pub mod buffer_memory;
 pub mod buffers;
 pub mod coords;
 pub mod editor;
+pub mod shape_util;
 pub mod shapes;
 pub mod sprites;
 pub mod styling;
