@@ -1,5 +1,5 @@
 (
-background_image: Some("synth4_background.png"),
+stylesheet_image: Some("synth4_background.png"),
 size: (1500, 997),
 padding: (0.005, 0.001),
 background: Sprite(dest_rect: Rect(pos: (0.000000, 0.000000, 1.000000, 0.664667)), src_rect: Rect(pos: (0.000000, 0.000000, 1500.000000, 997.000000))),
