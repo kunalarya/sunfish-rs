@@ -673,29 +673,13 @@ impl SynthGui {
                         modifiers_state.intersects(winit::event::ModifiersState::CTRL);
                 }
                 WindowEvent::Resized(size) => {
-                    // if !self.ignore_next_resized_event {
-                    // Constrain the resize; TODO: how? look at the last window size?
                     let (_new_width, _new_height) = (size.width, size.height);
-                    //   self.state.render_state.screen_metrics.constrain_resize(
-                    //       size.width,
-                    //       size.height,
-                    //       self.state.render_state.aspect_ratio,
-                    //   );
-
-                    // let override_size = winit::dpi::PhysicalSize::new(new_width, new_height);
-                    // window.set_inner_size(override_size);
-
                     self.state.render_state.resize(
                         &size,
-                        //&override_size,
                         &mut self.state.widgets,
                         &self.parameters,
                     );
                     window.request_redraw();
-                    //self.ignore_next_resized_event = true;
-                    // } else {
-                    //     self.ignore_next_resized_event = false;
-                    // }
                 }
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::MouseInput {
@@ -781,18 +765,10 @@ impl SynthGui {
                         );
                     }
                     self.state.render_state.last_position = position;
-                    window.request_redraw();
                 }
                 _ => {}
             },
             Event::RedrawRequested(_) => {
-                self.render_sync();
-                self.state
-                    .render_state
-                    .iters
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-            Event::MainEventsCleared => {
                 self.render_sync();
                 self.state
                     .render_state
