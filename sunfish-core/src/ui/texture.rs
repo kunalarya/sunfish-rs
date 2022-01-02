@@ -1,4 +1,5 @@
 use anyhow::*;
+use iced_wgpu::wgpu;
 use image::GenericImageView;
 
 pub struct Texture {

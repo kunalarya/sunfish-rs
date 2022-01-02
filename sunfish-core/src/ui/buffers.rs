@@ -1,4 +1,5 @@
 use bytemuck::Pod;
+use iced_wgpu::wgpu;
 
 // From iced_wgpu
 #[derive(Debug)]

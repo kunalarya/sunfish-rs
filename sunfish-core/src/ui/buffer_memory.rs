@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use iced_wgpu::wgpu;
 use lyon::tessellation;
 
 use crate::ui::buffers;
@@ -7,7 +8,7 @@ use crate::ui::buffers;
 pub type Buffers<V> = tessellation::VertexBuffers<V, u16>;
 
 pub trait GpuVertex: bytemuck::Zeroable + bytemuck::Pod + Clone + std::fmt::Debug {
-    fn descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a>;
+    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a>;
 }
 
 /// A Shape captures the CPU side of a single polygon with a
@@ -274,7 +275,10 @@ pub fn render<'a, V: GpuVertex>(
         rpass.set_bind_group(0, bind_group, &[]);
     }
     rpass.set_vertex_buffer(0, bufmem.buffers.vertices.buf.slice(..));
-    rpass.set_index_buffer(bufmem.buffers.indices.buf.slice(..));
+    rpass.set_index_buffer(
+        bufmem.buffers.indices.buf.slice(..),
+        wgpu::IndexFormat::Uint16,
+    );
 
     for range in &bufmem.ind_ranges.0 {
         if !range.is_empty() {

@@ -15,28 +15,32 @@ debug = true
 [dependencies]
 anyhow = "1.0"
 async-std = "1.6.5"
-crossbeam = "0.8.1"
-copy_from = { path = "../copy_from" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f6e99e9aa6f5aeb6b721cb05e4d882a51d995909" }        # { path = "../../baseview" }
 bytemuck = { version = "1.4", features = ["derive"] }
-futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
+copy_from = { path = "../copy_from" }
+crossbeam = "0.8.1"
+futures = { version = "0.3.5", default-features = false, features = ["std", "executor"] }
+iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "ac7cf12" } # { path = "../../iced_baseview" }
+iced_core = { version = "0.4.0" }                                                         # { path = "../../iced/core" }
+iced_futures = { version = "0.3.0" }                                                      # { path = "../../iced/futures" }
+iced_graphics = { version = "0.2.0" }                                                     # { path = "../../iced/graphics" }
+iced_native = { version = "0.4.0" }                                                       # { path = "../../iced/native" }
+iced_wgpu = { version = "0.4.0" }                                                         # { path = "../../iced/wgpu" }
 image = "0.23"
+keyboard-types = { version = "0.5", default-features = false }
 lazy_static = "1.4.0"
 log = "0.4.*"
-# Commit SHA: 6bf3599c
-# lyon = { path = "../../lyon" }
 lyon = { git = "https://github.com/nical/lyon.git", rev = "6bf3599c" }
 num = "0.2.0"
 num-traits = "0.2"
+raw-window-handle = { version = "0.3" }
 ron = "^0.6.4"
 serde = { version = "1.0.60", features = ["serde_derive"] }
 serde_json = { version = "1.0.59" }
 simplelog = "0.5.*"
 twox-hash = { version = "1.0" }
 vst = { git = "https://github.com/kunalarya/vst-unsafe-rs.git", branch = "main" }
-# wgpu = { git = "https://github.com/gfx-rs/wgpu.git", branch = "v0.6" }
-wgpu = "0.6"
-wgpu_glyph = "0.10.0"
-winit = { git = "https://github.com/kunalarya/winit.git", branch = "winit_0_25_child_win_macos" }
+wgpu_glyph = "0.11"
 
 [build-dependencies]
 anyhow = "1.0"

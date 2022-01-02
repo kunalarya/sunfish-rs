@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use iced_wgpu::wgpu;
 use std::mem;
 
 use crate::ui::buffer_memory::{
@@ -37,18 +38,18 @@ impl SpriteVertex {
 }
 
 impl GpuVertex for SpriteVertex {
-    fn descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        wgpu::VertexBufferDescriptor {
-            stride: mem::size_of::<Self>() as wgpu::BufferAddress,
+    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
-                wgpu::VertexAttributeDescriptor {
+                wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float3,
                 },
-                wgpu::VertexAttributeDescriptor {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float2,
                 },
@@ -101,14 +102,16 @@ fn sprite_to_vertices_and_indices(
         src_px.src_rect[3] / texture_height,
     );
     let vertices = vec![
+        // These must be specified CCW, as that's how we've defined
+        // front_face below.
         SpriteVertex {
             position: [x, y, 0.0],
             tex_coords: [src_x, src_y],
         }
         .correct(screen_metrics),
         SpriteVertex {
-            position: [xw, y, 0.0],
-            tex_coords: [src_xw, src_y],
+            position: [x, yh, 0.0],
+            tex_coords: [src_x, src_yh],
         }
         .correct(screen_metrics),
         SpriteVertex {
@@ -117,8 +120,8 @@ fn sprite_to_vertices_and_indices(
         }
         .correct(screen_metrics),
         SpriteVertex {
-            position: [x, yh, 0.0],
-            tex_coords: [src_x, src_yh],
+            position: [xw, y, 0.0],
+            tex_coords: [src_xw, src_y],
         }
         .correct(screen_metrics),
     ];
@@ -276,8 +279,8 @@ pub fn create_pipeline_and_bind_group(
     swapchain_format: &wgpu::TextureFormat,
     texture: &texture::Texture,
 ) -> (wgpu::RenderPipeline, wgpu::BindGroup) {
-    let vs_module = device.create_shader_module(wgpu::include_spirv!("shader_sprite.vert.spv"));
-    let fs_module = device.create_shader_module(wgpu::include_spirv!("shader_sprite.frag.spv"));
+    let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader_sprite.vert.spv"));
+    let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader_sprite.frag.spv"));
 
     log::info!("Creating sprite bind groups...");
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -285,9 +288,9 @@ pub fn create_pipeline_and_bind_group(
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::SampledTexture {
-                    component_type: wgpu::TextureComponentType::Float,
-                    dimension: wgpu::TextureViewDimension::D2,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 },
                 count: None,
@@ -295,13 +298,15 @@ pub fn create_pipeline_and_bind_group(
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::Sampler { comparison: false },
+                ty: wgpu::BindingType::Sampler {
+                    comparison: false,
+                    filtering: true,
+                },
                 count: None,
             },
         ],
         label: Some("sprite_bind_group_layout"),
     });
-
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         entries: &[
@@ -327,26 +332,35 @@ pub fn create_pipeline_and_bind_group(
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("render_pipeline"),
         layout: Some(&pipeline_layout),
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
+        vertex: wgpu::VertexState {
             module: &vs_module,
             entry_point: "main",
+            buffers: &[SpriteVertex::descriptor()],
         },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+        fragment: Some(wgpu::FragmentState {
             module: &fs_module,
             entry_point: "main",
+            targets: &[wgpu::ColorTargetState {
+                format: *swapchain_format,
+                alpha_blend: wgpu::BlendState::REPLACE,
+                color_blend: wgpu::BlendState::REPLACE,
+                write_mask: wgpu::ColorWrite::ALL,
+            }],
         }),
-        // Use the default rasterizer state: no culling, no depth bias
-        rasterization_state: None,
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[(*swapchain_format).into()],
-        depth_stencil_state: None,
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[SpriteVertex::descriptor()],
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::Back,
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
         },
-        sample_count: 1,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
     });
 
     (pipeline, bind_group)
