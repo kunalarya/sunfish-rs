@@ -5,74 +5,60 @@ on: [push, pull_request]
 env:
   CARGO_TERM_COLOR: always
 
+# h/t Octasine
 jobs:
-  fmt:
-    name: Rustfmt (sunfish-core)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./sunfish-core
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - run: pip install black==21.7b0
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt
-      - name: Check python formatting (black)
-        run: black --check .
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-        working-directory: ./sunfish-core/
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-10.15, ubuntu-18.04, ubuntu-20.04]
+        # TODO: Add windows-latest
 
-  check:
-    name: Check (sunfish-core)
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      - name: Run cargo check
-        run: cargo check
-        working-directory: ./sunfish-core/
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+    - run: pip install black==21.7b0
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+        components: rustfmt
+    - name: Check python formatting (black)
+      run: black --check .
+    - name: Run cargo fmt
+      run: cargo fmt --all -- --check
+      working-directory: ./sunfish-core/
 
-  clippy:
-    name: Clippy (sunfish-core)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./sunfish-core
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
+    - name: Install baseview dependencies
+      run: |
+        sudo apt update
+        sudo apt install libx11-xcb-dev libxcb-dri2-0-dev libgl1-mesa-dev libxcb-icccm4-dev libxcursor-dev
+      if: contains(matrix.os, 'ubuntu')
+
+    - name: Install stable Rust
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
           override: true
           components: clippy
-      - run: cargo clippy
-        working-directory: ./sunfish-core/
 
-  test:
-    name: Cargo Test (sunfish-core)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./sunfish-core
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: clippy
-      - name: Run cargo test
-        run: cargo test
-        working-directory: ./sunfish-core/
+    - name: Rustfmt (sunfish-core)
+      run: cargo fmt --all -- --check
+      working-directory: ./sunfish-core/
+
+    - name: Check python formatting (black)
+      run: black --check .
+      working-directory: ./sunfish-py/
+
+    - name: Run cargo check
+      run: cargo check
+      working-directory: ./sunfish-core/
+
+    - name: Clippy (sunfish-core)
+      run: cargo clippy
+      working-directory: ./sunfish-core/
+
+    - name: Run cargo test
+      run: cargo test
+      working-directory: ./sunfish-core/

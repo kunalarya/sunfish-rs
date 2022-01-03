@@ -1,22 +1,18 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::iter;
 use std::sync;
 use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 
 use twox_hash::RandomXxHashBuilder64;
-use wgpu;
 use wgpu_glyph::{ab_glyph, GlyphBrush, GlyphBrushBuilder, Section, Text};
 use wgpu_glyph::{HorizontalAlign, Layout, VerticalAlign};
-use winit::{
-    event::{ElementState, Event, MouseButton, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-};
 
 use crate::params::sync::{Subscriber, Synchronizer};
 use crate::params::{Params, ParamsMeta};
 use crate::ui::buffer_memory;
+use crate::ui::controls::Controls;
 use crate::ui::coords::{Coord2, UserVec2, Vec2};
 use crate::ui::shapes::{self, ScreenMetrics};
 use crate::ui::sprites;
@@ -24,9 +20,16 @@ use crate::ui::styling;
 use crate::ui::widgets::{LabelPosition, Widget, WidgetId};
 use crate::util::borrow_return::{Borrower, Owner};
 
+use baseview::{EventStatus, Window, WindowHandler, WindowScalePolicy};
+use iced_baseview::Size;
+use iced_native::clipboard;
+use iced_native::keyboard::Modifiers;
+use iced_native::Event as IcedEvent;
+use iced_native::{program, Debug};
+use iced_wgpu::{wgpu, Backend, Renderer, Settings, Viewport};
+
 const DRAG_FACTOR_NORMAL: f32 = 4.0;
 const DRAG_FACTOR_SLOW: f32 = 0.7;
-const TICK_PER_SEC: f32 = 60.0; // 240.0;
 
 /// How often to query the host for parameter updates (and thus update the GUI).
 const PARAM_SYNC_PER_SEC: f32 = 60.0;
@@ -90,51 +93,64 @@ struct State {
     widgets: WidgetMap,
     render_state: RenderState,
     interactive_state: InteractiveState,
-    mouse_pos: Coord2,
-    render_poller: Poller,
+    mouse_pos_norm: Coord2,
     // TODO: Change to distinguish Ctrl, Shift, Cmd, etc.
     modifier_active_ctrl: bool,
 }
 
 impl State {
-    pub async fn new(
+    pub async fn new<'a>(
+        window: &'a Window<'a>,
+        size: baseview::Size,
+        scaling: f64,
         meta: sync::Arc<ParamsMeta>,
-        window: &Window,
         styling: &styling::Styling,
     ) -> Self {
         let widgets = styling::create_widgets(styling, meta);
 
-        //log::info!("Loaded widgets: {:?}", widgets);
-        let (render_state, widgets) = RenderState::new(window, widgets, styling).await;
+        let (render_state, widgets) =
+            RenderState::new(widgets, window, size, scaling, styling).await;
 
-        let tick_duration = Duration::from_secs_f32(1.0 / TICK_PER_SEC);
         Self {
             widgets,
             interactive_state: InteractiveState::Idle,
-            render_poller: Poller::new(tick_duration),
             render_state,
-            mouse_pos: Coord2::new(0.0, 0.0),
+            mouse_pos_norm: Coord2::new(-1.0, -1.0),
             modifier_active_ctrl: false,
         }
     }
 }
 
 struct RenderState {
-    surface: wgpu::Surface,
+    program_state: program::State<Controls>,
+    events: Vec<IcedEvent>,
+    debug: Debug,
+
+    viewport: Viewport,
     device: wgpu::Device,
+    swap_chain: wgpu::SwapChain,
+    surface: wgpu::Surface,
+    format: wgpu::TextureFormat,
+    staging_belt: wgpu::util::StagingBelt,
     queue: wgpu::Queue,
     sc_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
-    last_position: winit::dpi::PhysicalPosition<f64>,
+
+    cursor_position: iced_baseview::Point,
+    resized: bool,
+    logical_size: Size,
+    modifiers: Modifiers,
+    window_info: baseview::WindowInfo,
+    // TODO: Consider removing logical_size, use window_info directly.
+    // TODO: Replace ScreenMetrics with window info.
     screen_metrics: ScreenMetrics,
-    _aspect_ratio: f32,
+
+    renderer: Renderer,
 
     background: [f64; 3],
     background_sprite_index: Option<usize>,
     spritesheet: sprites::SpriteSheet,
     shapes: shapes::Shapes,
     glyph_brush: GlyphBrush<(), ab_glyph::FontArc, RandomXxHashBuilder64>,
-    staging_belt: wgpu::util::StagingBelt,
 
     default_padding: Coord2,
 
@@ -148,40 +164,54 @@ struct RenderState {
 }
 
 impl RenderState {
-    async fn new(
-        window: &Window,
+    async fn new<'a>(
         mut widgets: Vec<Widget>,
+        window: &'a Window<'a>,
+        size: baseview::Size,
+        scaling: f64,
         styling: &styling::Styling,
     ) -> (Self, WidgetMap) {
-        let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb;
+        let window_info = baseview::WindowInfo::from_logical_size(size, scaling);
 
-        let size = window.inner_size();
+        let viewport = Viewport::with_physical_size(
+            iced_baseview::Size::new(
+                window_info.physical_size().width,
+                window_info.physical_size().height,
+            ),
+            window_info.scale(),
+        );
 
-        let screen_metrics = ScreenMetrics::new(size.width, size.height, window.scale_factor());
+        let screen_metrics = ScreenMetrics::new(
+            window_info.physical_size().width,
+            window_info.physical_size().height,
+            window_info.scale(),
+        );
 
+        // Initialize wgpu
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                // Request an adapter which can render to our surface
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
             })
             .await
-            .expect("Failed to find an appropiate adapter");
-
-        // Create the logical device and command queue
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
-                    shader_validation: true,
-                },
-                None,
-            )
-            .await
-            .expect("Failed to create device");
+            .expect("Request adapter");
+        let (device, queue) = {
+            adapter
+                .request_device(
+                    &wgpu::DeviceDescriptor {
+                        label: None,
+                        features: wgpu::Features::empty(),
+                        limits: wgpu::Limits::default(),
+                    },
+                    None, // Trace path
+                )
+                .await
+                .expect("Request device")
+        };
+        let swapchain_format = adapter.get_swap_chain_preferred_format(&surface);
 
         /////////////////////////////////////////////////////////////////
         // Sprites
@@ -230,7 +260,7 @@ impl RenderState {
         } else {
             None
         };
-        // add all widgets
+
         let mut widget_map = HashMap::new();
         let mut shapes_builder =
             shapes::ShapesBuilder::with_capacity(128, &device, &swapchain_format);
@@ -242,7 +272,6 @@ impl RenderState {
             );
             widget_map.insert(widget.id, widget);
         }
-
         /////////////////////////////////////////////////////////////////
         // Shapes
         /////////////////////////////////////////////////////////////////
@@ -252,27 +281,20 @@ impl RenderState {
 
         ///////////////////////////
 
-        let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: swapchain_format,
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
+        let sc_desc = {
+            let size = window_info.physical_size();
+            wgpu::SwapChainDescriptor {
+                usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+                format: swapchain_format,
+                width: size.width,
+                height: size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+            }
         };
 
         /////////////////////////////////////////////////////////////////
         // Text
         /////////////////////////////////////////////////////////////////
-        // let font = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        //     .parent()
-        //     .unwrap()
-        //     .join("/assets/fonts/BluuNext-Bold.otf");
-        // let font_bytes = include_bytes!("Inconsolata-Regular.ttf");
-        //let font_bytes = std::fs::read(font).unwrap();
-        //
-        //let font_bytes = include_bytes!("../../../../assets/fonts/Inconsolata-Regular.ttf");
-        // TODO: read from file instead.
-        //let font_bytes = include_bytes!("../../../assets/fonts/BluuNext-Bold.otf");
         let font_bytes = include_bytes!("../../../assets/fonts/Oswald-Medium.ttf");
         let active_font = ab_glyph::FontArc::try_from_slice(font_bytes).unwrap();
         // Create staging belt and a local pool
@@ -285,28 +307,54 @@ impl RenderState {
             styling::Background::Solid { color } => {
                 [color.r as f64, color.g as f64, color.b as f64]
             }
-            styling::Background::Sprite { .. } => [0.0, 0.0, 0.0],
+            styling::Background::Sprite { .. } => [1.0, 1.0, 1.0], // TODO set back to black
         };
 
-        let _aspect_ratio = screen_metrics.ratio;
+        let mut debug = Debug::new();
+        let mut renderer = Renderer::new(Backend::new(&device, Settings::default()));
+
+        let controls = Controls::new();
+
+        let program_state = program::State::new(
+            controls,
+            viewport.logical_size(),
+            iced_baseview::Point::new(-1.0, -1.0),
+            &mut renderer,
+            &mut debug,
+        );
+
         let inst = Self {
-            surface,
-            device,
-            queue,
-
-            sc_desc,
-            swap_chain,
+            program_state,
+            events: Vec::with_capacity(128),
+            debug,
             screen_metrics,
-            _aspect_ratio,
-            last_position: winit::dpi::PhysicalPosition::new(0.0, 0.0),
 
+            viewport,
+            device,
+            swap_chain,
+            surface,
+            format: swapchain_format,
+            queue,
+            sc_desc,
+
+            cursor_position: iced_baseview::Point::new(-1.0, -1.0),
+            resized: false,
+            logical_size: iced_baseview::Size::new(
+                window_info.logical_size().width as f32,
+                window_info.logical_size().height as f32,
+            ),
+            modifiers: Modifiers::default(),
+            window_info,
+
+            renderer,
+
+            spritesheet,
+            shapes,
             background: background_color,
             background_sprite_index,
 
             default_padding: Coord2::new(styling.padding.0, styling.padding.1),
 
-            spritesheet,
-            shapes,
             glyph_brush,
             staging_belt,
 
@@ -319,7 +367,7 @@ impl RenderState {
 
     fn resize(
         &mut self,
-        new_size: &winit::dpi::PhysicalSize<u32>,
+        new_size: &baseview::PhySize,
         widgets: &mut WidgetMap,
         params: &Synchronizer,
     ) {
@@ -393,6 +441,22 @@ impl RenderState {
     }
 
     async fn render(&mut self, widgets: &mut WidgetMap) {
+        if self.resized {
+            let size = self.window_info.physical_size();
+
+            self.swap_chain = self.device.create_swap_chain(
+                &self.surface,
+                &wgpu::SwapChainDescriptor {
+                    usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+                    format: self.format,
+                    width: size.width,
+                    height: size.height,
+                    present_mode: wgpu::PresentMode::Mailbox,
+                },
+            );
+
+            self.resized = false;
+        }
         if self.debug_poller.tick() {
             self.fps = self.iters.swap(0, std::sync::atomic::Ordering::Relaxed);
         };
@@ -406,7 +470,7 @@ impl RenderState {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render encoder"),
+                label: Some("Render Encoder"),
             });
 
         // Note: read wgpu docs before reordering any of these operations.
@@ -424,8 +488,10 @@ impl RenderState {
             &mut self.staging_belt,
             &mut encoder,
         );
+
         {
             let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
@@ -535,62 +601,78 @@ impl RenderState {
                 &mut self.staging_belt,
                 &mut encoder,
                 &frame.view,
-                self.screen_metrics.width_u32,
-                self.screen_metrics.height_u32,
+                self.window_info.physical_size().width,
+                self.window_info.physical_size().height,
             )
             .expect("Draw queued");
-        self.staging_belt.finish();
 
-        self.queue.submit(Some(encoder.finish()));
+        // Now draw iced over the scene.
+        let _mouse_interaction = self.renderer.backend_mut().draw(
+            &self.device,
+            &mut self.staging_belt,
+            &mut encoder,
+            &frame.view,
+            &self.viewport,
+            self.program_state.primitive(),
+            &self.debug.overlay(),
+        );
+
+        self.staging_belt.finish();
+        self.queue.submit(iter::once(encoder.finish()));
 
         let f = self.staging_belt.recall();
         async_std::task::spawn(f);
     }
 }
 
-/// Create testing GUI.
-async fn run(event_loop: EventLoop<()>, window: Window, styling: styling::Styling) {
-    let sample_rate = 44100.0;
-
-    // Create the parameters themselves.
-    let params = Params::new(sample_rate);
-    let meta = ParamsMeta::new();
-
-    let mut synchronizer = Synchronizer::new(meta, params);
-    let subscriber = synchronizer.subscriber();
-    let mut params_owner = Owner::new(synchronizer);
-    let mut subscriber_owner = Owner::new(subscriber);
-
-    let mut sg = SynthGui::create(
-        &window,
-        &styling,
-        params_owner.borrow(),
-        subscriber_owner.borrow(),
-    )
-    .expect("SynthGui: failed to create.");
-
-    event_loop.run(move |event, _, control_flow| sg.receive_events(&window, event, control_flow));
-}
-
 pub fn main() {
     let _ =
         simplelog::SimpleLogger::init(simplelog::LevelFilter::Info, simplelog::Config::default())
             .unwrap();
-    let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
 
     let styling = styling::load_default();
-    window.set_inner_size(winit::dpi::PhysicalSize::new(
-        styling.size.0,
-        styling.size.1,
-    ));
 
-    async_std::task::block_on(run(event_loop, window, styling));
+    // Logical size.
+    let size = baseview::Size::new(styling.size.0 as f64, styling.size.1 as f64);
+
+    let options = baseview::WindowOpenOptions {
+        title: "Sunfish Synthesizer".into(),
+        size,
+        scale: WindowScalePolicy::SystemScaleFactor,
+    };
+
+    let scaling = match options.scale {
+        WindowScalePolicy::ScaleFactor(scale) => scale,
+        WindowScalePolicy::SystemScaleFactor => 1.0,
+    };
+    baseview::Window::open_blocking(options, move |window| {
+        let sample_rate = 44100.0;
+
+        // Create the parameters themselves.
+        let params = Params::new(sample_rate);
+        let meta = ParamsMeta::new();
+
+        let mut synchronizer = Synchronizer::new(meta, params);
+        let subscriber = synchronizer.subscriber();
+        let mut params_owner = Owner::new(synchronizer);
+        let mut subscriber_owner = Owner::new(subscriber);
+
+        SynthGui::create(
+            window,
+            &styling,
+            params_owner.borrow(),
+            subscriber_owner.borrow(),
+            size,
+            scaling,
+        )
+        .expect("SynthGui: failed to create.")
+    });
 }
 
 pub struct SynthGui {
     // GUI and rendering state.
     state: State,
+
     parameters: Borrower<Synchronizer>,
     subscriber: Borrower<Subscriber>,
 
@@ -598,24 +680,30 @@ pub struct SynthGui {
     meta: sync::Arc<ParamsMeta>,
     param_sync_poller: Poller,
     widgets_to_update: HashSet<WidgetId>,
-
     _ignore_next_resized_event: bool,
 }
 
 impl SynthGui {
     pub fn create(
-        window: &Window,
+        window: &Window<'_>,
         styling: &styling::Styling,
         parameters: Borrower<Synchronizer>,
         subscriber: Borrower<Subscriber>,
+        size: baseview::Size,
+        scaling: f64,
     ) -> Result<SynthGui, std::io::Error> {
         let meta = (parameters.grabbed.as_ref().unwrap()).meta.clone();
-
         let meta = sync::Arc::new(meta);
         let param_count = meta.count();
-        let state = async_std::task::block_on(State::new(sync::Arc::clone(&meta), window, styling));
-        let param_sync_duration = Duration::from_secs_f32(1.0 / PARAM_SYNC_PER_SEC);
 
+        let state = async_std::task::block_on(State::new(
+            window,
+            size,
+            scaling,
+            sync::Arc::clone(&meta),
+            styling,
+        ));
+        let param_sync_duration = Duration::from_secs_f32(1.0 / PARAM_SYNC_PER_SEC);
         let mut synth_gui = SynthGui {
             state,
 
@@ -624,162 +712,17 @@ impl SynthGui {
             meta,
             param_sync_poller: Poller::new(param_sync_duration),
             widgets_to_update: HashSet::with_capacity(param_count),
-
             _ignore_next_resized_event: false,
         };
         synth_gui.synchronize_all_params();
         Ok(synth_gui)
     }
 
-    pub fn receive_events<'a>(
-        &mut self,
-        window: &Window,
-        event: Event<'a, ()>,
-        control_flow: &mut ControlFlow,
-    ) {
-        if self.param_sync_poller.tick() {
-            self.parameters.refresh_maybe();
-            self.synchronize_params();
-            self.render_sync();
-        }
-
-        let next_tick = Instant::now() + self.state.render_poller.duration;
-        *control_flow = ControlFlow::WaitUntil(next_tick);
-
-        match event {
-            Event::NewEvents(StartCause::Init) => {
-                *control_flow =
-                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
-            }
-            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
-                *control_flow =
-                    ControlFlow::WaitUntil(Instant::now() + self.param_sync_poller.duration);
-            }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::ScaleFactorChanged {
-                    scale_factor,
-                    new_inner_size,
-                } => {
-                    self.state.render_state.screen_metrics.scale_factor = scale_factor;
-                    self.state.render_state.resize(
-                        new_inner_size,
-                        &mut self.state.widgets,
-                        &self.parameters,
-                    );
-                    window.request_redraw();
-                }
-                WindowEvent::ModifiersChanged(modifiers_state) => {
-                    self.state.modifier_active_ctrl =
-                        modifiers_state.intersects(winit::event::ModifiersState::CTRL);
-                }
-                WindowEvent::Resized(size) => {
-                    let (_new_width, _new_height) = (size.width, size.height);
-                    self.state.render_state.resize(
-                        &size,
-                        &mut self.state.widgets,
-                        &self.parameters,
-                    );
-                    window.request_redraw();
-                }
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::MouseInput {
-                    state: input_state,
-                    button,
-                    ..
-                } => {
-                    if button == MouseButton::Left {
-                        match self.state.interactive_state {
-                            InteractiveState::Idle => {
-                                if input_state == ElementState::Pressed {
-                                    let (x, y) = (self.state.mouse_pos.x, self.state.mouse_pos.y);
-                                    for (widget_id, widget) in self.state.widgets.iter_mut() {
-                                        if widget.interactive && widget.in_bounds_rel(x, y) {
-                                            let mouse = ActiveMouseState {
-                                                pos: Coord2::new(x, y),
-                                                start: Coord2::new(x, y),
-                                            };
-                                            let drag_factor = DRAG_FACTOR_NORMAL;
-                                            widget.on_drag_start(&mouse, &drag_factor);
-                                            self.state.interactive_state =
-                                                InteractiveState::Dragging {
-                                                    id: *widget_id,
-                                                    mouse,
-                                                };
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            InteractiveState::Dragging { id, .. } => {
-                                if let Some(widget) = self.state.widgets.get_mut(&id) {
-                                    if let Some(new_value) = widget.on_drag_done() {
-                                        self.update_param(&id, new_value);
-                                        self.state.render_state.update_widget(
-                                            &mut self.state.widgets,
-                                            &self.parameters,
-                                            &id,
-                                        );
-                                    }
-                                }
-                                if input_state == ElementState::Released {
-                                    self.state.interactive_state = InteractiveState::Idle;
-                                }
-                            }
-                        }
-                    }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    // Grab relative position.
-                    let (x, y) = (
-                        self.state
-                            .render_state
-                            .screen_metrics
-                            .screen_x_to_norm(position.x as f32),
-                        self.state
-                            .render_state
-                            .screen_metrics
-                            .screen_y_to_norm(position.y as f32),
-                    );
-
-                    self.state.mouse_pos.x = x;
-                    self.state.mouse_pos.y = y;
-                    if let InteractiveState::Dragging { id, mouse } =
-                        &mut self.state.interactive_state
-                    {
-                        let id = *id;
-                        mouse.pos.x = self.state.mouse_pos.x;
-                        mouse.pos.y = self.state.mouse_pos.y;
-                        let df = if self.state.modifier_active_ctrl {
-                            DRAG_FACTOR_SLOW
-                        } else {
-                            DRAG_FACTOR_NORMAL
-                        };
-                        if let Some(widget) = self.state.widgets.get_mut(&id) {
-                            let tentative_value = widget.on_dragging(mouse, &df);
-                            self.update_param(&id, tentative_value);
-                        }
-                        self.state.render_state.update_widget(
-                            &mut self.state.widgets,
-                            &self.parameters,
-                            &id,
-                        );
-                    }
-                    self.state.render_state.last_position = position;
-                }
-                _ => {}
-            },
-            Event::RedrawRequested(_) => {
-                self.render_sync();
-                self.state
-                    .render_state
-                    .iters
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-            _ => {}
-        }
-    }
-
     fn render_sync(&mut self) {
+        self.state
+            .render_state
+            .iters
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         async_std::task::block_on(self.state.render_state.render(&mut self.state.widgets));
     }
 
@@ -814,11 +757,188 @@ impl SynthGui {
         }
         any_changed
     }
+
     fn update_param(&mut self, id: &WidgetId, val: f64) {
         let eparam = match id {
             WidgetId::Unspecified { .. } => return,
             WidgetId::Bound { eparam } => *eparam,
         };
         self.parameters.write_parameter(eparam, val);
+    }
+
+    fn refresh_widget(&mut self, id: &WidgetId) {
+        if let Some(widget) = self.state.widgets.get_mut(id) {
+            if let Some(new_value) = widget.on_drag_done() {
+                self.update_param(id, new_value);
+                self.state.render_state.update_widget(
+                    &mut self.state.widgets,
+                    &self.parameters,
+                    id,
+                );
+            }
+        }
+    }
+}
+
+impl WindowHandler for SynthGui {
+    fn on_frame(&mut self, _window: &mut baseview::Window) {
+        if self.param_sync_poller.tick() {
+            self.parameters.refresh_maybe();
+            self.synchronize_params();
+        };
+        self.render_sync();
+    }
+
+    fn on_event(&mut self, _window: &mut baseview::Window, event: baseview::Event) -> EventStatus {
+        match &event {
+            baseview::Event::Mouse(e) => {
+                match e {
+                    baseview::MouseEvent::ButtonPressed(baseview::MouseButton::Left) => {
+                        match self.state.interactive_state {
+                            InteractiveState::Idle => {
+                                let (x, y) =
+                                    (self.state.mouse_pos_norm.x, self.state.mouse_pos_norm.y);
+                                for (widget_id, widget) in self.state.widgets.iter_mut() {
+                                    if widget.interactive && widget.in_bounds_rel(x, y) {
+                                        let mouse = ActiveMouseState {
+                                            pos: Coord2::new(x, y),
+                                            start: Coord2::new(x, y),
+                                        };
+                                        let drag_factor = DRAG_FACTOR_NORMAL;
+                                        widget.on_drag_start(&mouse, &drag_factor);
+                                        self.state.interactive_state = InteractiveState::Dragging {
+                                            id: *widget_id,
+                                            mouse,
+                                        };
+                                        break;
+                                    }
+                                }
+                            }
+                            InteractiveState::Dragging { id, .. } => {
+                                self.refresh_widget(&id);
+                            }
+                        }
+                    }
+                    baseview::MouseEvent::ButtonReleased(baseview::MouseButton::Left) => {
+                        if let InteractiveState::Dragging { id, .. } = self.state.interactive_state
+                        {
+                            self.refresh_widget(&id);
+                        }
+                        self.state.interactive_state = InteractiveState::Idle;
+                    }
+                    baseview::MouseEvent::WheelScrolled(_scroll_delta) => {}
+
+                    baseview::MouseEvent::CursorMoved { position } => {
+                        // Grab relative position.
+                        let (x, y) = (
+                            self.state
+                                .render_state
+                                .screen_metrics
+                                .screen_x_to_norm(position.x as f32),
+                            self.state
+                                .render_state
+                                .screen_metrics
+                                .screen_y_to_norm(position.y as f32),
+                        );
+                        self.state.mouse_pos_norm.x = x;
+                        self.state.mouse_pos_norm.y = y;
+                        if let InteractiveState::Dragging { id, mouse } =
+                            &mut self.state.interactive_state
+                        {
+                            let id = *id;
+                            let (cursor_x, cursor_y) =
+                                (
+                                    self.state.render_state.screen_metrics.screen_x_to_norm(
+                                        self.state.render_state.cursor_position.x,
+                                    ),
+                                    self.state.render_state.screen_metrics.screen_y_to_norm(
+                                        self.state.render_state.cursor_position.y,
+                                    ),
+                                );
+                            mouse.pos.x = cursor_x;
+                            mouse.pos.y = cursor_y;
+                            let df = if self.state.modifier_active_ctrl {
+                                DRAG_FACTOR_SLOW
+                            } else {
+                                DRAG_FACTOR_NORMAL
+                            };
+                            if let Some(widget) = self.state.widgets.get_mut(&id) {
+                                let tentative_value = widget.on_dragging(mouse, &df);
+                                self.update_param(&id, tentative_value);
+                            }
+                            self.state.render_state.update_widget(
+                                &mut self.state.widgets,
+                                &self.parameters,
+                                &id,
+                            );
+                        }
+                        self.state.render_state.cursor_position =
+                            conversion::baseview_point_to_iced_baseview_point(position);
+                    }
+                    // TODO: CursorEntered, CursorLeft
+                    _ => {}
+                }
+            }
+            baseview::Event::Keyboard(_) => {}
+            baseview::Event::Window(e) => {
+                match e {
+                    baseview::WindowEvent::Resized(window_info) => {
+                        self.state.render_state.logical_size =
+                            conversion::baseview_size_to_iced_baseview_size(
+                                &window_info.logical_size(),
+                            );
+                        self.state.render_state.viewport = Viewport::with_physical_size(
+                            Size::new(
+                                window_info.physical_size().width,
+                                window_info.physical_size().height,
+                            ),
+                            window_info.scale(),
+                        );
+                        self.state.render_state.window_info = *window_info;
+                        self.state.render_state.resized = true;
+                        self.state.render_state.resize(
+                            &window_info.physical_size(),
+                            &mut self.state.widgets,
+                            &self.parameters,
+                        );
+                    }
+                    baseview::WindowEvent::WillClose => {
+                        // TODO: Handle window close events.
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        iced_baseview::conversion::baseview_to_iced_events(
+            event,
+            &mut self.state.render_state.events,
+            &mut self.state.render_state.modifiers,
+        );
+        for event in self.state.render_state.events.drain(..) {
+            self.state.render_state.program_state.queue_event(event);
+        }
+        if !self.state.render_state.program_state.is_queue_empty() {
+            // We update iced
+            let _ = self.state.render_state.program_state.update(
+                self.state.render_state.viewport.logical_size(),
+                self.state.render_state.cursor_position,
+                &mut self.state.render_state.renderer,
+                &mut clipboard::Null,
+                &mut self.state.render_state.debug,
+            );
+        }
+        EventStatus::Captured
+    }
+}
+
+mod conversion {
+
+    pub fn baseview_size_to_iced_baseview_size(size: &baseview::Size) -> iced_baseview::Size {
+        iced_baseview::Size::new(size.width as f32, size.height as f32)
+    }
+
+    pub fn baseview_point_to_iced_baseview_point(point: &baseview::Point) -> iced_baseview::Point {
+        iced_baseview::Point::new(point.x as f32, point.y as f32)
     }
 }

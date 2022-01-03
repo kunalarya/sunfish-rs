@@ -1,6 +1,7 @@
 use std::mem;
 
 use bytemuck::{Pod, Zeroable};
+use iced_wgpu::wgpu;
 use lyon::tessellation;
 use lyon::tessellation::{FillVertex, StrokeVertex};
 use serde::Deserialize;
@@ -153,17 +154,17 @@ impl ShapeVertex {
 }
 
 impl buffer_memory::GpuVertex for ShapeVertex {
-    fn descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        wgpu::VertexBufferDescriptor {
-            stride: mem::size_of::<Self>() as wgpu::BufferAddress,
+    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
-                wgpu::VertexAttributeDescriptor {
+                wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float3,
                 },
-                wgpu::VertexAttributeDescriptor {
+                wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float3,
@@ -207,9 +208,9 @@ pub fn create_pipeline(
     swapchain_format: &wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
     let shape_vs_module =
-        device.create_shader_module(wgpu::include_spirv!("shader_shape.vert.spv"));
+        device.create_shader_module(&wgpu::include_spirv!("shader_shape.vert.spv"));
     let shape_fs_module =
-        device.create_shader_module(wgpu::include_spirv!("shader_shape.frag.spv"));
+        device.create_shader_module(&wgpu::include_spirv!("shader_shape.frag.spv"));
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("shape_render_pipeline_layout"),
@@ -219,26 +220,35 @@ pub fn create_pipeline(
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("shape_render_pipeline"),
         layout: Some(&pipeline_layout),
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
+        vertex: wgpu::VertexState {
             module: &shape_vs_module,
             entry_point: "main",
+            buffers: &[ShapeVertex::descriptor()],
         },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+        fragment: Some(wgpu::FragmentState {
             module: &shape_fs_module,
             entry_point: "main",
+            targets: &[wgpu::ColorTargetState {
+                format: *swapchain_format,
+                alpha_blend: wgpu::BlendState::REPLACE,
+                color_blend: wgpu::BlendState::REPLACE,
+                write_mask: wgpu::ColorWrite::ALL,
+            }],
         }),
-        // Use the default rasterizer state: no culling, no depth bias
-        rasterization_state: None,
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[(*swapchain_format).into()],
-        depth_stencil_state: None,
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[ShapeVertex::descriptor()],
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::Back,
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
         },
-        sample_count: 1,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
     });
     pipeline
 }
