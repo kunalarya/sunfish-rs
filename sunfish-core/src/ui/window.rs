@@ -130,10 +130,11 @@ struct RenderState {
     device: wgpu::Device,
     swap_chain: wgpu::SwapChain,
     surface: wgpu::Surface,
-    format: wgpu::TextureFormat,
+    swapchain_format: wgpu::TextureFormat,
     staging_belt: wgpu::util::StagingBelt,
     queue: wgpu::Queue,
     sc_desc: wgpu::SwapChainDescriptor,
+    smaa_target: smaa::SmaaTarget,
 
     cursor_position: iced_baseview::Point,
     resized: bool,
@@ -323,6 +324,16 @@ impl RenderState {
             &mut debug,
         );
 
+        // Create SMAA target
+        let smaa_target = smaa::SmaaTarget::new(
+            &device,
+            &queue,
+            window_info.physical_size().width,
+            window_info.physical_size().height,
+            swapchain_format,
+            smaa::SmaaMode::Smaa1X,
+        );
+
         let inst = Self {
             program_state,
             events: Vec::with_capacity(128),
@@ -333,9 +344,10 @@ impl RenderState {
             device,
             swap_chain,
             surface,
-            format: swapchain_format,
+            swapchain_format,
             queue,
             sc_desc,
+            smaa_target,
 
             cursor_position: iced_baseview::Point::new(-1.0, -1.0),
             resized: false,
@@ -389,6 +401,15 @@ impl RenderState {
                 params,
             );
         }
+        // Create SMAA target
+        self.smaa_target = smaa::SmaaTarget::new(
+            &self.device,
+            &self.queue,
+            self.window_info.physical_size().width,
+            self.window_info.physical_size().height,
+            self.swapchain_format,
+            smaa::SmaaMode::Smaa1X,
+        );
     }
 
     fn update_all_widgets(&mut self, widgets: &mut WidgetMap, params: &Synchronizer) {
@@ -448,7 +469,7 @@ impl RenderState {
                 &self.surface,
                 &wgpu::SwapChainDescriptor {
                     usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-                    format: self.format,
+                    format: self.swapchain_format,
                     width: size.width,
                     height: size.height,
                     present_mode: wgpu::PresentMode::Mailbox,
@@ -467,6 +488,11 @@ impl RenderState {
             .get_current_frame()
             .expect("Failed to acquire next swap chain texture")
             .output;
+
+        let frame = self
+            .smaa_target
+            .start_frame(&self.device, &self.queue, &frame.view);
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -493,7 +519,7 @@ impl RenderState {
             let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.view,
+                    attachment: &frame,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -600,7 +626,7 @@ impl RenderState {
                 &self.device,
                 &mut self.staging_belt,
                 &mut encoder,
-                &frame.view,
+                &frame,
                 self.window_info.physical_size().width,
                 self.window_info.physical_size().height,
             )
@@ -611,7 +637,7 @@ impl RenderState {
             &self.device,
             &mut self.staging_belt,
             &mut encoder,
-            &frame.view,
+            &frame,
             &self.viewport,
             self.program_state.primitive(),
             &self.debug.overlay(),
