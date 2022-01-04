@@ -830,15 +830,16 @@ impl WindowHandler for SynthGui {
 
                     baseview::MouseEvent::CursorMoved { position } => {
                         // Grab relative position.
+                        let scaling = self.state.render_state.window_info.scale();
                         let (x, y) = (
                             self.state
                                 .render_state
                                 .screen_metrics
-                                .screen_x_to_norm(position.x as f32),
+                                .screen_x_to_norm((position.x * scaling) as f32),
                             self.state
                                 .render_state
                                 .screen_metrics
-                                .screen_y_to_norm(position.y as f32),
+                                .screen_y_to_norm((position.y * scaling) as f32),
                         );
                         self.state.mouse_pos_norm.x = x;
                         self.state.mouse_pos_norm.y = y;
@@ -846,15 +847,14 @@ impl WindowHandler for SynthGui {
                             &mut self.state.interactive_state
                         {
                             let id = *id;
-                            let (cursor_x, cursor_y) =
-                                (
-                                    self.state.render_state.screen_metrics.screen_x_to_norm(
-                                        self.state.render_state.cursor_position.x,
-                                    ),
-                                    self.state.render_state.screen_metrics.screen_y_to_norm(
-                                        self.state.render_state.cursor_position.y,
-                                    ),
-                                );
+                            let (cursor_x, cursor_y) = (
+                                self.state.render_state.screen_metrics.screen_x_to_norm(
+                                    self.state.render_state.cursor_position.x * (scaling as f32),
+                                ),
+                                self.state.render_state.screen_metrics.screen_y_to_norm(
+                                    self.state.render_state.cursor_position.y * (scaling as f32),
+                                ),
+                            );
                             mouse.pos.x = cursor_x;
                             mouse.pos.y = cursor_y;
                             let df = if self.state.modifier_active_ctrl {
