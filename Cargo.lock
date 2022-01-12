@@ -2365,9 +2365,9 @@ dependencies = [
 
 [[package]]
 name = "shaderc"
-version = "0.7.3"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58da8aaf4ad3508598cdf098567114c98d5f455de7d69b1213232ac557bc67ea"
+checksum = "50b8aeaae10b9bda5cba66736a7e265f67698e912e1cc6a4678acba286e22be9"
 dependencies = [
  "libc",
  "shaderc-sys",
@@ -2375,9 +2375,9 @@ dependencies = [
 
 [[package]]
 name = "shaderc-sys"
-version = "0.7.3"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bd76ec0bd25f2017a65250373485e43cdc81b5cb8fd83c6115375c8d018cdf9"
+checksum = "5b12d7c62d6732884c9dfab587503fa3a795b108df152415a89da23812d4737e"
 dependencies = [
  "cmake",
  "libc",
@@ -2414,16 +2414,6 @@ name = "slotmap"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bf34684c5767b87de9119790e92e9a1d60056be2ceeaf16a8e6ef13082aeab1"
-
-[[package]]
-name = "smaa"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14877a4dc93ac99e8058b9276b057fa6946a9b4b889ed086773248cfb3f8bbae"
-dependencies = [
- "shaderc",
- "wgpu",
-]
 
 [[package]]
 name = "smallvec"
@@ -2510,7 +2500,6 @@ dependencies = [
  "serde_json",
  "shaderc",
  "simplelog",
- "smaa",
  "twox-hash",
  "vst",
  "wgpu_glyph",
