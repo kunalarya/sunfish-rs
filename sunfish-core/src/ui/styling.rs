@@ -7,6 +7,7 @@ use crate::params::ParamsMeta;
 use crate::ui::coords::Rect;
 use crate::ui::shapes::{Color, Polarity};
 use crate::ui::widgets;
+use crate::ui::widgets::{knob, panel, spinner, toggle, vslider};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Styling {
@@ -38,7 +39,7 @@ pub enum Element {
     VSlider {
         widget_id: widgets::WidgetId,
         rect: Rect,
-        sprite: Option<widgets::VSliderSprite>,
+        sprite: Option<vslider::VSliderSprite>,
         value_text: widgets::Text,
         value_text_color: Color,
     },
@@ -53,7 +54,7 @@ pub enum Element {
         widget_id: widgets::WidgetId,
         rect: Rect,
         label: Option<widgets::Text>,
-        sprite: Option<widgets::ToggleSprite>,
+        sprite: Option<toggle::ToggleSprite>,
     },
     Panel {
         rect: Rect,
@@ -99,7 +100,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 value_text_color,
                 polarity,
             } => {
-                widgets.push(widgets::Knob::new_widget(
+                widgets.push(knob::Knob::new_widget(
                     Arc::clone(&meta),
                     *widget_id,
                     rect.clone(),
@@ -119,7 +120,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 ..
             } => {
                 uniq_id += 1;
-                widgets.push(widgets::Panel::new_widget(
+                widgets.push(panel::Panel::new_widget(
                     Arc::clone(&meta),
                     widgets::WidgetId::Unspecified { id: uniq_id },
                     rect.clone(),
@@ -133,7 +134,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 value_text,
                 value_text_color,
             } => {
-                widgets.push(widgets::Spinner::new_widget(
+                widgets.push(spinner::Spinner::new_widget(
                     Arc::clone(&meta),
                     *widget_id,
                     rect.clone(),
@@ -149,7 +150,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 label,
                 sprite,
             } => {
-                widgets.push(widgets::Toggle::new_widget(
+                widgets.push(toggle::Toggle::new_widget(
                     Arc::clone(&meta),
                     *widget_id,
                     rect.clone(),
@@ -165,7 +166,7 @@ pub fn create_widgets(def: &Styling, meta: Arc<ParamsMeta>) -> Vec<widgets::Widg
                 value_text,
                 value_text_color,
             } => {
-                widgets.push(widgets::VSlider::new_widget(
+                widgets.push(vslider::VSlider::new_widget(
                     Arc::clone(&meta),
                     *widget_id,
                     rect.clone(),
