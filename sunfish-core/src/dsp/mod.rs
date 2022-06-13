@@ -3,9 +3,11 @@ pub mod env;
 pub mod filter;
 pub mod interpolation;
 pub mod interpolator;
+pub mod interpolator2;
 pub mod osc;
 pub mod resonant_filter;
 pub mod smoothing;
+pub mod util;
 
 pub const TAU: f64 = std::f64::consts::PI * 2.0;
 

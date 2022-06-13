@@ -19,6 +19,7 @@ baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f6e99e9aa
 bytemuck = { version = "1.4", features = ["derive"] }
 copy_from = { path = "../copy_from" }
 crossbeam = "0.8.1"
+enum_dispatch = "0.3.6"
 futures = { version = "0.3.5", default-features = false, features = ["std", "executor"] }
 iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "ac7cf12" } # { path = "../../iced_baseview" }
 iced_core = { version = "0.4.0" }                                                         # { path = "../../iced/core" }
