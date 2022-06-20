@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-python@v2
-    - run: pip install black==21.7b0
+    - run: pip install black==22.3.0
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
