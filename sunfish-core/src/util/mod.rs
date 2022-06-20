@@ -36,7 +36,7 @@ pub fn setup_undenormalization() {
 }
 
 #[cfg(not(target_arch = "x86_64"))]
-fn setup_undenormalization() {
+pub fn setup_undenormalization() {
     // Do nothing.
 }
 
