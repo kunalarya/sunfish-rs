@@ -1,17 +1,16 @@
 use std::collections::HashMap;
 
 use crate::dsp::osc::{Unison, WaveShape};
-use crate::dsp::{HashableF64};
 use crate::dsp::util;
+use crate::dsp::HashableF64;
 
-type ShapeKey = u8;
 pub const MAX_UNISON: usize = 32;
 
 type WaveformKey = HashableF64;
 
 struct Waveforms {
     frequencies: Vec<f64>,
-    waves: HashMap<WaveformKey, Vec<f64>>
+    waves: HashMap<WaveformKey, Vec<f64>>,
 }
 
 // Cache the generated/interpolated waveform.
@@ -51,49 +50,65 @@ impl State {
 
 pub struct Populate<'a> {
     sample_rate: f64,
-    voices: usize,
+    voice_count: usize,
     shape: &'a WaveShape,
     freq: f64,
     output_buf: &'a mut [f64],
     output_count: usize,
-    cache: &'a mut State,
     unison: Unison,
     unison_amt: f64,
 }
 
 impl<'a> Populate<'a> {
-    fn frequency_changed(&self) -> bool {
-        self.freq != self.cache.freq
-            || self.unison != self.cache.unison
-            || self.unison_amt != self.cache.unison_amt
+    fn frequency_changed(&self, cache: &State) -> bool {
+        self.freq != cache.freq
+            || self.unison != cache.unison
+            || self.unison_amt != cache.unison_amt
     }
 }
 
 struct Interpolator;
 
 impl Interpolator {
-    fn populate(&mut self, args: &Populate, waveforms: &Waveforms) {
+    fn populate(&mut self, args: &mut Populate, cache: &mut State, waveforms: &Waveforms) {
         if args.freq == 0.0 {
             log::error!("Zero frequency");
             return;
         }
-        if args.frequency_changed() {
+
+        let mut frequency_changed = false;
+        if args.frequency_changed(&cache) {
+            frequency_changed = true;
             let bias_up = true;
-                let ref_freq = util::closest_number_in(args.freq, &waveforms.frequencies, bias_up);
-                let key =  HashableF64::from_float(ref_freq);
-                args.cache.key = key;
-                args.cache.freq = args.freq;
-                for voice in 0..args.voices {
-                    args.cache.f_samples[voice] = args.sample_rate / (args.freq + (voice as f64) * args.unison_amt);
-                }
-                args.cache.unison = args.unison;
+            let ref_freq = util::closest_number_in(args.freq, &waveforms.frequencies, bias_up);
+            let key = HashableF64::from_float(ref_freq);
+            cache.key = key;
+            cache.freq = args.freq;
+            for voice in 0..args.voice_count {
+                cache.f_samples[voice] =
+                    args.sample_rate / (args.freq + (voice as f64) * args.unison_amt);
+            }
+            cache.unison = args.unison;
         }
 
         let ref_waveform = waveforms
             .waves
-            .get(&args.cache.key)
-            .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", args.cache.key));
-        args.cache.ref_waveform_len = ref_waveform.len() as f64;
+            .get(&cache.key)
+            .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key));
+        // TODO: remove -- int -> float is ~5 cycles on Intel,
+        if frequency_changed {
+            cache.ref_waveform_len = ref_waveform.len() as f64;
+        }
+
+        cache.phase = interpolate_linear_inplace(
+            &ref_waveform,          // reference
+            cache.ref_waveform_len, // ref_len_f
+            cache.phase,            // input_phases
+            cache.f_samples,        // desired_samples
+            args.voice_count,       // voice_count
+            args.output_buf,        // output_buf
+            args.output_count,      // output_count
+        );
     }
 }
 

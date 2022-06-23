@@ -84,4 +84,3 @@ mod test {
         assert_eq!(closest_number_in(1.0, &fs, false), 5.0);
     }
 }
-

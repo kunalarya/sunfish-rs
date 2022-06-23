@@ -6,8 +6,8 @@ use log::{info, trace, warn};
 
 use crate::dsp::interpolation;
 use crate::dsp::osc::{Unison, WaveShape};
-use crate::dsp::{normalize, HashableF64, TAU};
 use crate::dsp::util;
+use crate::dsp::{normalize, HashableF64, TAU};
 use crate::util::note_freq;
 
 type ShapeKey = u8;
@@ -315,4 +315,3 @@ impl Interpolator {
         cache.last_phase2 = phase2;
     }
 }
-
