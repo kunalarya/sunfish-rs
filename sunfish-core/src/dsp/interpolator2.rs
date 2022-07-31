@@ -13,6 +13,23 @@ struct Waveforms {
     waves: HashMap<WaveformKey, Vec<f64>>,
 }
 
+pub trait HasWaveforms<K> {
+    // TODO: rename
+    fn get(&self, key: &K) -> &'_ [f64];
+    fn frequencies(&self) -> &'_ [f64];
+}
+
+impl HasWaveforms<WaveformKey> for Waveforms {
+    fn get(&self, key: &WaveformKey) -> &'_ [f64] {
+        self.waves
+            .get(key)
+            .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", key))
+    }
+    fn frequencies(&self) -> &'_ [f64] {
+        &self.frequencies
+    }
+}
+
 // Cache the generated/interpolated waveform.
 #[derive(Clone, Debug)]
 pub struct State {
@@ -30,7 +47,7 @@ impl State {
         Self {
             freq: 0.0,
             phase: Default::default(),
-            key: HashableF64::from_float(0.0),
+            key: Default::default(),
             f_samples: Default::default(),
             ref_waveform_len: 0.0,
             unison: Unison::Off,
@@ -40,7 +57,7 @@ impl State {
 
     pub fn reset(&mut self) {
         self.freq = 0.0;
-        self.key = HashableF64::from_float(0.0);
+        self.key = Default::default();
         self.f_samples = Default::default();
         self.ref_waveform_len = 0.0;
         self.unison = Unison::Off;
@@ -51,7 +68,6 @@ impl State {
 pub struct Populate<'a> {
     sample_rate: f64,
     voice_count: usize,
-    shape: &'a WaveShape,
     freq: f64,
     output_buf: &'a mut [f64],
     output_count: usize,
@@ -67,10 +83,13 @@ impl<'a> Populate<'a> {
     }
 }
 
-struct Interpolator;
+pub struct Interpolator;
 
 impl Interpolator {
-    fn populate(&mut self, args: &mut Populate, cache: &mut State, waveforms: &Waveforms) {
+    pub fn populate<W>(&mut self, args: &mut Populate, cache: &mut State, waveforms: &W)
+    where
+        W: HasWaveforms<HashableF64>,
+    {
         if args.freq == 0.0 {
             log::error!("Zero frequency");
             return;
@@ -80,7 +99,7 @@ impl Interpolator {
         if args.frequency_changed(&cache) {
             frequency_changed = true;
             let bias_up = true;
-            let ref_freq = util::closest_number_in(args.freq, &waveforms.frequencies, bias_up);
+            let ref_freq = util::closest_number_in(args.freq, &waveforms.frequencies(), bias_up);
             let key = HashableF64::from_float(ref_freq);
             cache.key = key;
             cache.freq = args.freq;
@@ -91,10 +110,11 @@ impl Interpolator {
             cache.unison = args.unison;
         }
 
-        let ref_waveform = waveforms
-            .waves
-            .get(&cache.key)
-            .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key));
+        // let ref_waveform = waveforms
+        //     .waves
+        //     .get(&cache.key)
+        //     .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key));
+        let ref_waveform = waveforms.get(&cache.key);
         // TODO: remove -- int -> float is ~5 cycles on Intel,
         if frequency_changed {
             cache.ref_waveform_len = ref_waveform.len() as f64;
@@ -166,4 +186,51 @@ pub fn interpolate_linear_inplace(
 #[inline(always)]
 fn index_wrapped(length: isize, index: isize) -> usize {
     index as usize % length as usize
+}
+
+mod tests {
+
+    use super::*;
+    use crate::dsp::interpolator as v1_interp;
+
+    #[test]
+    fn compare_v1_v2() {
+        let sample_rate = 44100.0;
+        let freq = 2500.0;
+        let key = freq.into();
+        let waveforms = Waveforms {
+            frequencies: vec![2500.0],
+            waves: {
+                let mut waves: HashMap<WaveformKey, Vec<f64>> = HashMap::new();
+                waves.insert(key, vec![1.0, 2.0, 3.0, 4.0]);
+                waves
+            },
+        };
+        let mut interpolator = Interpolator;
+        let mut output_buf = [0.0f64; 2048];
+        let output_count = output_buf.len();
+        let mut args = Populate {
+            sample_rate,
+            voice_count: 1,
+            freq,
+            output_buf: &mut output_buf,
+            output_count,
+            unison: Unison::Off,
+            unison_amt: 0.0,
+        };
+        let phase: [f64; MAX_UNISON] = Default::default();
+        let f_samples: [f64; MAX_UNISON] = Default::default();
+        let mut state = State {
+            freq,
+            phase,
+            key,
+            f_samples,
+            ref_waveform_len: 4.0,
+            unison: Unison::Off,
+            unison_amt: 0.0,
+        };
+        interpolator.populate(&mut args, &mut state, &waveforms);
+
+        let mut v1i = v1_interp::Interpolator::new(sample_rate);
+    }
 }

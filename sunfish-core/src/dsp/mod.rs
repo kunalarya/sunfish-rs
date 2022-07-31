@@ -14,7 +14,7 @@ pub const TAU: f64 = std::f64::consts::PI * 2.0;
 type F64AsU = u64;
 
 // Useful for putting floats into hashmaps.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct HashableF64(F64AsU);
 
 impl HashableF64 {
@@ -25,6 +25,12 @@ impl HashableF64 {
     #[allow(dead_code)]
     fn to_float(&self) -> f64 {
         f64::from_bits(self.0)
+    }
+}
+
+impl Into<HashableF64> for f64 {
+    fn into(self) -> HashableF64 {
+        HashableF64::from_float(self)
     }
 }
 
