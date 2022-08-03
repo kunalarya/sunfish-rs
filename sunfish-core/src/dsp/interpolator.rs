@@ -19,19 +19,20 @@ const HARD_SAW_HARMONICS: usize = 64;
 // Cache the generated/interpolated waveform.
 #[derive(Clone, Debug)]
 pub struct CachedWaveform {
-    last_freq: f64,
-    last_phase: f64,
-    last_phase2: f64,
+    // TODO: remove pubs
+    pub last_freq: f64,
+    pub last_phase: f64,
+    pub last_phase2: f64,
     #[allow(dead_code)]
-    last_phase3: f64,
+    pub last_phase3: f64,
     #[allow(dead_code)]
-    last_phase4: f64,
-    key: (ShapeKey, HashableF64),
-    f_samples: f64,
-    f_samples2: f64,
-    ref_waveform_len: f64,
-    last_unison: Unison,
-    last_unison_amt: f64,
+    pub last_phase4: f64,
+    pub key: (ShapeKey, HashableF64),
+    pub f_samples: f64,
+    pub f_samples2: f64,
+    pub ref_waveform_len: f64,
+    pub last_unison: Unison,
+    pub last_unison_amt: f64,
 }
 
 impl CachedWaveform {
@@ -313,5 +314,9 @@ impl Interpolator {
         };
         cache.last_phase = phase;
         cache.last_phase2 = phase2;
+    }
+
+    pub fn temporary_get_ref_cache(&self) -> &RefCache {
+        &self.references
     }
 }

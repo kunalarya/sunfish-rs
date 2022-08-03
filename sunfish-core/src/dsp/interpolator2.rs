@@ -196,13 +196,49 @@ mod tests {
     #[test]
     fn compare_v1_v2() {
         let sample_rate = 44100.0;
-        let freq = 2500.0;
-        let key = freq.into();
+        let mut interpolator_v1 = v1_interp::Interpolator::new(sample_rate);
+        let freq = 3520.0; // A7
+        let shape = WaveShape::HardSaw;
+        let freq_key = freq.into();
+
+        let v1_key = (shape.value(), freq_key);
+        let waveform_data = interpolator_v1
+            .temporary_get_ref_cache()
+            .get(&v1_key)
+            .unwrap()
+            .clone();
+        let mut output_buf_v1 = [0.0f64; 2048];
+        let output_count = output_buf_v1.len();
+
+        let mut cached_waveform = v1_interp::CachedWaveform {
+            last_freq: 0.0,
+            last_phase: 0.0,
+            last_phase2: 0.0,
+            last_phase3: 0.0,
+            last_phase4: 0.0,
+            key: v1_key,
+            f_samples: sample_rate / freq,
+            f_samples2: 0.0,
+            ref_waveform_len: waveform_data.len() as f64,
+            last_unison: Unison::Off,
+            last_unison_amt: 0.0,
+        };
+
+        interpolator_v1.populate(
+            shape,
+            freq,
+            &mut output_buf_v1,
+            output_count,
+            &mut cached_waveform,
+            Unison::Off,
+            0.0,
+        );
+
         let waveforms = Waveforms {
             frequencies: vec![2500.0],
             waves: {
                 let mut waves: HashMap<WaveformKey, Vec<f64>> = HashMap::new();
-                waves.insert(key, vec![1.0, 2.0, 3.0, 4.0]);
+                waves.insert(freq_key, waveform_data);
                 waves
             },
         };
@@ -223,14 +259,16 @@ mod tests {
         let mut state = State {
             freq,
             phase,
-            key,
+            key: freq_key,
             f_samples,
             ref_waveform_len: 4.0,
             unison: Unison::Off,
             unison_amt: 0.0,
         };
         interpolator.populate(&mut args, &mut state, &waveforms);
-
-        let mut v1i = v1_interp::Interpolator::new(sample_rate);
+        for (idx, value) in args.output_buf.iter().enumerate() {
+            let v1_value = output_buf_v1[idx];
+            println!("v1: {:?}, v2: {:?}", v1_value, value);
+        }
     }
 }
