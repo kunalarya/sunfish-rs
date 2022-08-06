@@ -289,8 +289,8 @@ impl Interpolator {
         // Render a new waveform.
         let (phase, phase2) = if unison == Unison::Off {
             let phase = interpolation::interpolate_linear_inplace(
-                ref_waveform,           // input
-                cache.ref_waveform_len, // input_len_f
+                ref_waveform,           // reference
+                cache.ref_waveform_len, // ref_len_f
                 cache.last_phase,       // input_phase
                 cache.f_samples,        // target_samples
                 output_buf,             // output_buf

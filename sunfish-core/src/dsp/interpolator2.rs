@@ -207,7 +207,9 @@ mod tests {
             .get(&v1_key)
             .unwrap()
             .clone();
-        let mut output_buf_v1 = [0.0f64; 2048];
+        let ref_waveform_len = waveform_data.len() as f64;
+        const BUF_SIZE: usize = 48;
+        let mut output_buf_v1 = [0.0f64; BUF_SIZE];
         let output_count = output_buf_v1.len();
 
         let mut cached_waveform = v1_interp::CachedWaveform {
@@ -219,7 +221,7 @@ mod tests {
             key: v1_key,
             f_samples: sample_rate / freq,
             f_samples2: 0.0,
-            ref_waveform_len: waveform_data.len() as f64,
+            ref_waveform_len,
             last_unison: Unison::Off,
             last_unison_amt: 0.0,
         };
@@ -243,7 +245,7 @@ mod tests {
             },
         };
         let mut interpolator = Interpolator;
-        let mut output_buf = [0.0f64; 2048];
+        let mut output_buf = [0.0f64; BUF_SIZE];
         let output_count = output_buf.len();
         let mut args = Populate {
             sample_rate,
@@ -255,20 +257,23 @@ mod tests {
             unison_amt: 0.0,
         };
         let phase: [f64; MAX_UNISON] = Default::default();
-        let f_samples: [f64; MAX_UNISON] = Default::default();
+        let f_samples: [f64; MAX_UNISON] = {
+            let mut f_samples: [f64; MAX_UNISON] = Default::default();
+            f_samples[0] = sample_rate / freq;
+            f_samples
+        };
         let mut state = State {
             freq,
             phase,
             key: freq_key,
             f_samples,
-            ref_waveform_len: 4.0,
+            ref_waveform_len,
             unison: Unison::Off,
             unison_amt: 0.0,
         };
         interpolator.populate(&mut args, &mut state, &waveforms);
         for (idx, value) in args.output_buf.iter().enumerate() {
             let v1_value = output_buf_v1[idx];
-            println!("v1: {:?}, v2: {:?}", v1_value, value);
         }
     }
 }
