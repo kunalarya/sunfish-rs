@@ -2,6 +2,7 @@
 members = [
     "copy_from",
     "copy_from_derive",
+    "sunfish-bench",
     "sunfish-core",
     "sunfish-py",
     "sunfish-standalone",

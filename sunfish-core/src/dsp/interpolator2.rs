@@ -6,11 +6,11 @@ use crate::dsp::HashableF64;
 
 pub const MAX_UNISON: usize = 32;
 
-type WaveformKey = HashableF64;
+pub type WaveformKey = HashableF64;
 
-struct Waveforms {
-    frequencies: Vec<f64>,
-    waves: HashMap<WaveformKey, Vec<f64>>,
+pub struct Waveforms {
+    pub frequencies: Vec<f64>,
+    pub waves: HashMap<WaveformKey, Vec<f64>>,
 }
 
 pub trait HasWaveforms<K> {
@@ -33,13 +33,13 @@ impl HasWaveforms<WaveformKey> for Waveforms {
 // Cache the generated/interpolated waveform.
 #[derive(Clone, Debug)]
 pub struct State {
-    freq: f64,
-    phase: [f64; MAX_UNISON],
-    key: WaveformKey,
-    f_samples: [f64; MAX_UNISON],
-    ref_waveform_len: f64,
-    unison: Unison,
-    unison_amt: f64,
+    pub freq: f64,
+    pub phase: [f64; MAX_UNISON],
+    pub key: WaveformKey,
+    pub f_samples: [f64; MAX_UNISON],
+    pub ref_waveform_len: f64,
+    pub unison: Unison,
+    pub unison_amt: f64,
 }
 
 impl State {
@@ -66,13 +66,13 @@ impl State {
 }
 
 pub struct Populate<'a> {
-    sample_rate: f64,
-    voice_count: usize,
-    freq: f64,
-    output_buf: &'a mut [f64],
-    output_count: usize,
-    unison: Unison,
-    unison_amt: f64,
+    pub sample_rate: f64,
+    pub voice_count: usize,
+    pub freq: f64,
+    pub output_buf: &'a mut [f64],
+    pub output_count: usize,
+    pub unison: Unison,
+    pub unison_amt: f64,
 }
 
 impl<'a> Populate<'a> {
@@ -84,6 +84,7 @@ impl<'a> Populate<'a> {
 }
 
 pub struct Interpolator;
+use std::time::Instant;
 
 impl Interpolator {
     pub fn populate<W>(&mut self, args: &mut Populate, cache: &mut State, waveforms: &W)
@@ -95,6 +96,7 @@ impl Interpolator {
             return;
         }
 
+        let t0 = Instant::now();
         let mut frequency_changed = false;
         if args.frequency_changed(&cache) {
             frequency_changed = true;
@@ -109,16 +111,21 @@ impl Interpolator {
             }
             cache.unison = args.unison;
         }
+        let t1 = Instant::now();
+        //println!("t1-t0: {:?}", t1 - t0);
 
         // let ref_waveform = waveforms
         //     .waves
         //     .get(&cache.key)
         //     .unwrap_or_else(|| panic!("Internal error (bad key: {:?})", cache.key));
+        let t2 = Instant::now();
         let ref_waveform = waveforms.get(&cache.key);
         // TODO: remove -- int -> float is ~5 cycles on Intel,
         if frequency_changed {
             cache.ref_waveform_len = ref_waveform.len() as f64;
         }
+        let t3 = Instant::now();
+        //println!("t3-t2: {:?}", t3 - t2);
 
         cache.phase = interpolate_linear_inplace(
             &ref_waveform,          // reference
@@ -145,38 +152,63 @@ pub fn interpolate_linear_inplace(
 ) -> [f64; MAX_UNISON] {
     let ref_len = reference.len() as isize;
 
+    // let t0 = Instant::now();
     #[allow(clippy::uninit_assumed_init)]
     let mut phases: [f64; MAX_UNISON] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+    //let t1 = Instant::now();
+    //println!("t1-t0: {:?}", t1 - t0);
 
-    for (index, input_phase) in input_phases.iter().enumerate() {
-        phases[index] = input_phase % 1.0;
+    //let t2 = Instant::now();
+    for index in 0..voice_count {
+        phases[index] = input_phases[index] % 1.0;
     }
+    //let t3 = Instant::now();
+    //println!("t3-t2: {:?}", t3 - t2);
 
+    //let t4 = Instant::now();
     #[allow(clippy::uninit_assumed_init)]
     let mut phase_dts: [f64; MAX_UNISON] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+    //let t5 = Instant::now();
+    //println!("t5-t4: {:?}", t5 - t4);
 
+    //let t6 = Instant::now();
     for (index, desired_sample) in desired_samples.iter().enumerate() {
         phase_dts[index] = 1.0 / desired_sample;
     }
+    //let t7 = Instant::now();
+    //println!("t7-t6: {:?}", t7 - t6);
 
     #[allow(clippy::needless_range_loop)]
     for output_index in 0..output_count {
         // We will interpolate between datapoints at (n-2) to (n-1)
         output_buf[output_index] = 0.0;
         for i in 0..voice_count {
+            //let t8 = Instant::now();
             let ref_index = ref_len_f * phases[i];
             let ref_index_floor = ref_index.floor();
+            //let t9 = Instant::now();
+            //println!("t9-t8: {:?}", t9 - t8);
 
+            //let t10 = Instant::now();
             let eta = ref_index - ref_index_floor;
 
             let ref_index_floor_i = ref_index_floor as isize;
+            //let t11 = Instant::now();
+            //println!("t11-t10: {:?}", t11 - t10);
 
+            //let t12 = Instant::now();
             let a = reference[index_wrapped(ref_len, ref_index_floor_i)];
             let b = reference[index_wrapped(ref_len, ref_index_floor_i + 1)];
+            //let t13 = Instant::now();
+            //println!("t13-t12: {:?}", t13 - t12);
+
+            //let t14 = Instant::now();
             let voice = ((1.0 - eta) * a) + (eta * b);
             output_buf[output_index] += voice;
 
             phases[i] = (phases[i] + phase_dts[i]) % 1.0;
+            //let t15 = Instant::now();
+            //println!("t15-t14: {:?}", t15 - t14);
         }
     }
     phases
@@ -185,16 +217,26 @@ pub fn interpolate_linear_inplace(
 /// Wrap the index.
 #[inline(always)]
 fn index_wrapped(length: isize, index: isize) -> usize {
-    index as usize % length as usize
+    //index as usize % length as usize
+    (index % length) as usize
 }
 
 mod tests {
 
     use super::*;
     use crate::dsp::interpolator as v1_interp;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn compare_v1_v2() {
+        let perf_iters = 100;
+        fn summarize(times: &[Duration]) {
+            let avg_ns =
+                times.iter().map(|x| x.as_nanos() as f64).sum::<f64>() / (times.len() as f64);
+            println!("times: {times:?}");
+            println!("avg_ns: {avg_ns:.6}");
+        }
+
         let sample_rate = 44100.0;
         let mut interpolator_v1 = v1_interp::Interpolator::new(sample_rate);
         let freq = 3520.0; // A7
@@ -208,7 +250,7 @@ mod tests {
             .unwrap()
             .clone();
         let ref_waveform_len = waveform_data.len() as f64;
-        const BUF_SIZE: usize = 48;
+        const BUF_SIZE: usize = 16; //2048;
         let mut output_buf_v1 = [0.0f64; BUF_SIZE];
         let output_count = output_buf_v1.len();
 
@@ -226,15 +268,22 @@ mod tests {
             last_unison_amt: 0.0,
         };
 
-        interpolator_v1.populate(
-            shape,
-            freq,
-            &mut output_buf_v1,
-            output_count,
-            &mut cached_waveform,
-            Unison::Off,
-            0.0,
-        );
+        let mut times = vec![];
+        for _ in 0..perf_iters {
+            let t0 = Instant::now();
+            interpolator_v1.populate(
+                shape,
+                freq,
+                &mut output_buf_v1,
+                output_count,
+                &mut cached_waveform,
+                Unison::Off,
+                0.0,
+            );
+            let t1 = Instant::now();
+            times.push(t1 - t0);
+        }
+        summarize(&times);
 
         let waveforms = Waveforms {
             frequencies: vec![2500.0],
@@ -271,9 +320,21 @@ mod tests {
             unison: Unison::Off,
             unison_amt: 0.0,
         };
-        interpolator.populate(&mut args, &mut state, &waveforms);
+        let mut times = vec![];
+        for _ in 0..perf_iters {
+            let t0 = Instant::now();
+            interpolator.populate(&mut args, &mut state, &waveforms);
+            let t1 = Instant::now();
+            times.push(t1 - t0);
+        }
+        summarize(&times);
+        let mut errs = 0;
         for (idx, value) in args.output_buf.iter().enumerate() {
             let v1_value = output_buf_v1[idx];
+            if *value != v1_value {
+                errs += 1;
+            }
         }
+        println!("errors: {errs}");
     }
 }

@@ -2480,6 +2480,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunfish-bench"
+version = "0.1.0"
+dependencies = [
+ "sunfish-core",
+]
+
+[[package]]
 name = "sunfish-core"
 version = "0.1.0"
 dependencies = [
